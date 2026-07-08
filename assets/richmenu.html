@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 2500px; height: 1686px; }
+  .grid {
+    width: 2500px; height: 1686px;
+    display: grid;
+    grid-template-columns: 1250px 1250px;
+    grid-template-rows: 562px 562px 562px;
+    font-family: "PingFang TC", "Noto Sans TC", sans-serif;
+  }
+  .cell {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; gap: 24px;
+    border: 3px solid rgba(255,255,255,.25);
+  }
+  .icon { font-size: 150px; line-height: 1; }
+  .label { font-size: 90px; font-weight: 700; }
+  .sub { font-size: 44px; opacity: .8; font-weight: 400; }
+  .c1 { background:#1F7A5A; } .c2 { background:#2E8B6F; }
+  .c3 { background:#3D9C84; } .c4 { background:#4CAD99; }
+  .c5 { background:#5BBEAE; } .c6 { background:#6ACFC3; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell c1"><div class="icon">🍱</div><div class="label">記一餐</div></div>
+    <div class="cell c2"><div class="icon">🏋️</div><div class="label">記訓練</div><div class="sub">即將推出</div></div>
+    <div class="cell c3"><div class="icon">⚖️</div><div class="label">量體重</div></div>
+    <div class="cell c4"><div class="icon">📷</div><div class="label">拍照記</div><div class="sub">即將推出</div></div>
+    <div class="cell c5"><div class="icon">⚡</div><div class="label">快速補記</div></div>
+    <div class="cell c6"><div class="icon">📊</div><div class="label">查看總覽</div></div>
+  </div>
+</body>
+</html>

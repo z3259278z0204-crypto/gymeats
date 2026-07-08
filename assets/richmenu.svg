@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="2500" viewBox="0 0 2500 2500" font-family="PingFang TC, Noto Sans TC, sans-serif">
+  <defs>
+    <style>
+      .label { font-size: 90px; font-weight: 700; fill: #ffffff; }
+      .icon  { font-size: 150px; }
+      .sub   { font-size: 44px; fill: #ffffffcc; }
+    </style>
+  </defs>
+
+  <!-- 內容置中於 2500x2500，實際版面 y=407..2093（高 1686）-->
+  <rect x="0"    y="407"  width="1250" height="562" fill="#1F7A5A"/>
+  <rect x="1250" y="407"  width="1250" height="562" fill="#2E8B6F"/>
+  <rect x="0"    y="969"  width="1250" height="562" fill="#3D9C84"/>
+  <rect x="1250" y="969"  width="1250" height="562" fill="#4CAD99"/>
+  <rect x="0"    y="1531" width="1250" height="562" fill="#5BBEAE"/>
+  <rect x="1250" y="1531" width="1250" height="562" fill="#6ACFC3"/>
+  <line x1="1250" y1="407"  x2="1250" y2="2093" stroke="#ffffff40" stroke-width="4"/>
+  <line x1="0"    y1="969"  x2="2500" y2="969"  stroke="#ffffff40" stroke-width="4"/>
+  <line x1="0"    y1="1531" x2="2500" y2="1531" stroke="#ffffff40" stroke-width="4"/>
+
+  <text class="icon"  x="625"  y="657"  text-anchor="middle">🍱</text>
+  <text class="label" x="625"  y="787"  text-anchor="middle">記一餐</text>
+
+  <text class="icon"  x="1875" y="637"  text-anchor="middle">🏋️</text>
+  <text class="label" x="1875" y="767"  text-anchor="middle">記訓練</text>
+  <text class="sub"   x="1875" y="837"  text-anchor="middle">即將推出</text>
+
+  <text class="icon"  x="625"  y="1219" text-anchor="middle">⚖️</text>
+  <text class="label" x="625"  y="1349" text-anchor="middle">量體重</text>
+
+  <text class="icon"  x="1875" y="1199" text-anchor="middle">📷</text>
+  <text class="label" x="1875" y="1329" text-anchor="middle">拍照記</text>
+  <text class="sub"   x="1875" y="1399" text-anchor="middle">即將推出</text>
+
+  <text class="icon"  x="625"  y="1781" text-anchor="middle">⚡</text>
+  <text class="label" x="625"  y="1911" text-anchor="middle">快速補記</text>
+
+  <text class="icon"  x="1875" y="1781" text-anchor="middle">📊</text>
+  <text class="label" x="1875" y="1911" text-anchor="middle">查看總覽</text>
+</svg>

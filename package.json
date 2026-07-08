@@ -1,0 +1,24 @@
+{
+  "name": "gymeats",
+  "version": "1.0.0",
+  "description": "LINE 健身飲食記帳機器人 MVP：一餐同時記熱量與花費",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "menu": "node scripts/rich-menu.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@line/bot-sdk": "^11.1.0",
+    "better-sqlite3": "^12.11.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}

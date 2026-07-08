@@ -1,0 +1,15 @@
+# 祕密金鑰，絕對不外傳
+.env
+
+# 下載進來的工具本體
+node_modules/
+
+# 資料庫檔（你的個人紀錄）
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# 系統雜檔
+.DS_Store
+*.log
