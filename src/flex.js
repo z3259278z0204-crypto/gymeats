@@ -32,15 +32,19 @@ function row(label, value, highlight = false) {
 
 // 今日總覽卡片。summary 來自 db.getTodaySummary()，calTarget 可為 null
 function buildOverviewFlex(summary, calTarget) {
-  const { food, body } = summary;
+  const { food, body, workout } = summary;
+  const burn = workout ? workout.kcal : 0;
+  const net = food.kcal - burn; // 淨熱量 = 吃進去 - 運動燒掉
 
-  // 熱量：有目標就顯示「實際/目標」，超標補 ⚠️（純數字，不評論）
-  let kcalText = `${fmt(food.kcal)} 大卡`;
-  let kcalOver = false;
+  // 淨熱量：有目標就顯示「實際/目標」，超標補 ⚠️（純數字，不評論）
+  let netText = `${fmt(net)} 大卡`;
+  let netOver = false;
   if (calTarget) {
-    kcalOver = food.kcal > calTarget;
-    kcalText = `${fmt(food.kcal)}/${fmt(calTarget)}${kcalOver ? ' ⚠️' : ''}`;
+    netOver = net > calTarget;
+    netText = `${fmt(net)}/${fmt(calTarget)}${netOver ? ' ⚠️' : ''}`;
   }
+
+  const workoutCount = workout ? workout.count : 0;
 
   return {
     type: 'flex',
@@ -52,7 +56,12 @@ function buildOverviewFlex(summary, calTarget) {
         layout: 'vertical',
         contents: [
           { type: 'text', text: '今日總覽', weight: 'bold', size: 'lg', color: '#FFFFFF' },
-          { type: 'text', text: `已記 ${food.meals} 餐`, size: 'xs', color: '#FFFFFFCC' },
+          {
+            type: 'text',
+            text: `已記 ${food.meals} 餐 · ${workoutCount} 次訓練`,
+            size: 'xs',
+            color: '#FFFFFFCC',
+          },
         ],
         backgroundColor: '#1F7A5A',
         paddingAll: '16px',
@@ -63,7 +72,10 @@ function buildOverviewFlex(summary, calTarget) {
         spacing: 'md',
         paddingAll: '16px',
         contents: [
-          row('熱量', kcalText, kcalOver),
+          row('攝取', `${fmt(food.kcal)} 大卡`),
+          row('運動消耗', burn > 0 ? `-${fmt(burn)} 大卡` : '—'),
+          row('淨熱量', netText, netOver),
+          { type: 'separator', margin: 'md' },
           row('蛋白質', `${fmt(food.protein)} g`),
           row('碳水', `${fmt(food.carb)} g`),
           row('脂肪', `${fmt(food.fat)} g`),

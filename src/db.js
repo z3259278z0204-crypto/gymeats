@@ -51,9 +51,17 @@ db.exec(`
     reps     INTEGER,                     -- 次數
     weight   REAL,                        -- 重量
     duration INTEGER,                     -- 時長(分鐘)
+    kcal     REAL,                        -- 消耗熱量估算
     FOREIGN KEY (user) REFERENCES users(id)
   );
 `);
+
+// 舊資料庫若沒有 kcal 欄位，補上（新資料庫已含，這裡會被 catch 忽略）
+try {
+  db.exec('ALTER TABLE workout_logs ADD COLUMN kcal REAL');
+} catch (e) {
+  /* 欄位已存在，略過 */
+}
 
 // ---- 使用者：用 LINE 的 userId 找人，沒有就建一個，回傳我們自己的 id ----
 function getOrCreateUser(lineUid) {
@@ -94,6 +102,27 @@ function insertBody({ userId, weight, bodyfat }) {
     .run({ user: userId, ts: Date.now(), weight, bodyfat: bodyfat ?? null });
 }
 
+// ---- 寫入一筆訓練（含消耗熱量）----
+function insertWorkout({ userId, name, duration, kcal }) {
+  return db
+    .prepare(
+      `INSERT INTO workout_logs (user, ts, name, duration, kcal)
+       VALUES (@user, @ts, @name, @duration, @kcal)`
+    )
+    .run({
+      user: userId,
+      ts: Date.now(),
+      name,
+      duration: duration ?? null,
+      kcal: kcal ?? null,
+    });
+}
+
+// ---- 設定使用者每日熱量目標 ----
+function setUserTarget(userId, target) {
+  db.prepare('UPDATE users SET cal_target = ? WHERE id = ?').run(target, userId);
+}
+
 // ---- 算「今天」的區間（當地時間 00:00 到現在）----
 function todayStartMs() {
   const now = new Date();
@@ -124,7 +153,14 @@ function getTodaySummary(userId) {
     )
     .get(userId);
 
-  return { food, body: body || null };
+  const workout = db
+    .prepare(
+      `SELECT COALESCE(SUM(kcal), 0) AS kcal, COUNT(*) AS count
+       FROM workout_logs WHERE user = ? AND ts >= ?`
+    )
+    .get(userId, start);
+
+  return { food, body: body || null, workout };
 }
 
 module.exports = {
@@ -132,5 +168,7 @@ module.exports = {
   getOrCreateUser,
   insertFood,
   insertBody,
+  insertWorkout,
+  setUserTarget,
   getTodaySummary,
 };

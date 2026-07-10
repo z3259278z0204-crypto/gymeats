@@ -1,15 +1,23 @@
 // 決策中心：收到一則訊息，決定要記餐 / 記體重 / 回總覽 / 給說明
-const { getOrCreateUser, insertFood, insertBody, getTodaySummary } = require('./db');
+const {
+  getOrCreateUser,
+  insertFood,
+  insertBody,
+  insertWorkout,
+  setUserTarget,
+  getTodaySummary,
+} = require('./db');
 const { parseMessage } = require('./parser');
 const { estimateNutrition } = require('./ai');
 const { buildOverviewFlex, mealQuickReply, fmt } = require('./flex');
+const { config } = require('./config');
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
   記一餐: '記一餐直接打：餐別 品項 金額\n例：午餐 雞胸便當 120（金額可省略）',
   量體重: '量體重直接打數字就好\n例：72.3（也可加體脂：72.3 15）',
   快速補記: '快速補記：直接打品項即可，例「地瓜」\n沒打餐別和金額也能記',
-  記訓練: '記訓練功能開發中，先幫你留位子 🏋️',
+  記訓練: '記訓練：打「運動＋時間」，例：\n・慢跑 30\n・重訓 45\n・游泳（沒打時間預設 30 分鐘）\n會自動算消耗熱量',
   拍照記: '拍照記功能開發中，很快就來 📷',
   加照片: '拍照記功能開發中，很快就來 📷',
   熱量估不準: '之後會開放手動修正數字，先幫你記著這個需求 🙏',
@@ -45,7 +53,30 @@ async function handleEvent(event) {
   // ---- 今日總覽 ----
   if (intent.type === 'overview') {
     const summary = getTodaySummary(user.id);
-    return [buildOverviewFlex(summary, user.cal_target)];
+    const target = user.cal_target ?? config.calTargetDefault;
+    return [buildOverviewFlex(summary, target)];
+  }
+
+  // ---- 設定每日目標 ----
+  if (intent.type === 'setTarget') {
+    setUserTarget(user.id, intent.target);
+    return [text(`✅ 已把每日熱量目標設為 ${fmt(intent.target)} 大卡\n打「總覽」就會看到淨熱量對目標`)];
+  }
+
+  // ---- 記訓練（含消耗熱量）----
+  if (intent.type === 'workout') {
+    insertWorkout({
+      userId: user.id,
+      name: intent.activity,
+      duration: intent.minutes,
+      kcal: intent.kcal,
+    });
+    return [
+      text(
+        `✅ ${intent.activity} ${intent.minutes} 分鐘\n消耗約 ${fmt(intent.kcal)} 大卡`,
+        mealQuickReply
+      ),
+    ];
   }
 
   // ---- 體重 ----
@@ -84,7 +115,9 @@ async function handleEvent(event) {
     text(
       '我還看不懂這句 🤔\n' +
         '・記一餐：午餐 雞胸便當 120（金額可省略）\n' +
+        '・記訓練：慢跑 30、重訓 45\n' +
         '・記體重：直接打數字，如 72.3\n' +
+        '・設目標：目標 2600\n' +
         '・看今日：打「總覽」'
     ),
   ];

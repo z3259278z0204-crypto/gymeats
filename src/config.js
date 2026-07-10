@@ -11,6 +11,8 @@ const config = {
     model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
   },
   port: Number(process.env.PORT) || 3000,
+  // 每日熱量目標預設值（環境變數 CAL_TARGET）。使用者若用「目標 XXXX」設定會覆蓋這個
+  calTargetDefault: Number(process.env.CAL_TARGET) || null,
 };
 
 // 啟動時檢查必填金鑰有沒有漏，漏了就提前提醒，不要跑到一半才壞
