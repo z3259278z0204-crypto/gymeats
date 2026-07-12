@@ -32,12 +32,12 @@ const richMenu = {
   name: 'GymEats 主選單',
   chatBarText: '打開選單',
   areas: [
-    cell(0, 0, '記一餐'),     // 左上
-    cell(1, 0, '記訓練'),     // 右上（佔位）
-    cell(0, 1, '量體重'),     // 左中
-    cell(1, 1, '拍照記'),     // 右中（佔位）
-    cell(0, 2, '快速補記'),   // 左下
-    cell(1, 2, '總覽'),       // 右下 → 查看總覽
+    cell(0, 0, '記一餐'),      // 左上
+    cell(1, 0, '記帳'),        // 右上 → 跳出分類按鈕
+    cell(0, 1, '量體重'),      // 左中
+    cell(1, 1, '記訓練'),      // 右中
+    cell(0, 2, '本月花費'),    // 左下 → 查花費統計卡
+    cell(1, 2, '總覽'),        // 右下 → 今日總覽
   ],
 };
 
@@ -47,6 +47,17 @@ async function main() {
     console.error('❌ 找不到選單底圖：', imgPath);
     console.error('   請放一張 2500×1686 的 PNG 到 assets/richmenu.png 再重跑。');
     process.exit(1);
+  }
+
+  console.log('0/3 清掉舊選單（避免累積）…');
+  try {
+    const { richmenus } = await client.getRichMenuList();
+    for (const rm of richmenus || []) {
+      await client.deleteRichMenu(rm.richMenuId);
+      console.log('    刪除舊選單', rm.richMenuId);
+    }
+  } catch (e) {
+    console.log('    （沒有舊選單或略過）');
   }
 
   console.log('1/3 建立選單結構…');

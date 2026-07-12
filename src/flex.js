@@ -152,4 +152,33 @@ const mealQuickReply = {
   ],
 };
 
-module.exports = { buildOverviewFlex, buildSpendingFlex, mealQuickReply, fmt };
+// 記帳分類按鈕：點「記帳」後跳出，點一下分類就不用打字選類別
+// 送出的文字用「分類:xxx」讓 handler 記住這位使用者接下來要記哪一類
+const CATEGORY_BUTTONS = [
+  ['🚌', '交通'], ['🏠', '居住'], ['🎬', '娛樂'], ['🛍️', '購物'],
+  ['💊', '醫療'], ['📚', '學習'], ['🎁', '人情'], ['📦', '其他'],
+];
+const categoryQuickReply = {
+  items: CATEGORY_BUTTONS.map(([icon, name]) => ({
+    type: 'action',
+    action: { type: 'message', label: `${icon} ${name}`, text: `分類:${name}` },
+  })),
+};
+
+// 查花費快捷鈕：附在統計卡下面，點一下切換今日／本週／本月
+const spendingQuickReply = {
+  items: [
+    { type: 'action', action: { type: 'message', label: '📅 今日', text: '今日花費' } },
+    { type: 'action', action: { type: 'message', label: '🗓️ 本週', text: '本週花費' } },
+    { type: 'action', action: { type: 'message', label: '📆 本月', text: '本月花費' } },
+  ],
+};
+
+module.exports = {
+  buildOverviewFlex,
+  buildSpendingFlex,
+  mealQuickReply,
+  categoryQuickReply,
+  spendingQuickReply,
+  fmt,
+};

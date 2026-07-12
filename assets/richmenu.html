@@ -15,12 +15,12 @@
   .cell {
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    color: #fff; gap: 24px;
-    border: 3px solid rgba(255,255,255,.25);
+    color: #fff; gap: 8px;
+    border: 3px solid rgba(255,255,255,.22);
   }
-  .icon { font-size: 150px; line-height: 1; }
-  .label { font-size: 90px; font-weight: 700; }
-  .sub { font-size: 44px; opacity: .8; font-weight: 400; }
+  /* 圖示為主角，字很小很淡：用點的、不靠文字 */
+  .icon  { font-size: 230px; line-height: 1; }
+  .label { font-size: 58px; font-weight: 500; opacity: .82; letter-spacing: 4px; }
   .c1 { background:#1F7A5A; } .c2 { background:#2E8B6F; }
   .c3 { background:#3D9C84; } .c4 { background:#4CAD99; }
   .c5 { background:#5BBEAE; } .c6 { background:#6ACFC3; }
@@ -29,11 +29,11 @@
 <body>
   <div class="grid">
     <div class="cell c1"><div class="icon">🍱</div><div class="label">記一餐</div></div>
-    <div class="cell c2"><div class="icon">🏋️</div><div class="label">記訓練</div><div class="sub">即將推出</div></div>
+    <div class="cell c2"><div class="icon">💰</div><div class="label">記帳</div></div>
     <div class="cell c3"><div class="icon">⚖️</div><div class="label">量體重</div></div>
-    <div class="cell c4"><div class="icon">📷</div><div class="label">拍照記</div><div class="sub">即將推出</div></div>
-    <div class="cell c5"><div class="icon">⚡</div><div class="label">快速補記</div></div>
-    <div class="cell c6"><div class="icon">📊</div><div class="label">查看總覽</div></div>
+    <div class="cell c4"><div class="icon">🏃</div><div class="label">記訓練</div></div>
+    <div class="cell c5"><div class="icon">🧾</div><div class="label">查花費</div></div>
+    <div class="cell c6"><div class="icon">📊</div><div class="label">總覽</div></div>
   </div>
 </body>
 </html>

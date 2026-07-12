@@ -14,8 +14,19 @@ const {
 } = require('./db');
 const { parseMessage } = require('./parser');
 const { estimateNutrition } = require('./ai');
-const { buildOverviewFlex, buildSpendingFlex, mealQuickReply, fmt } = require('./flex');
+const {
+  buildOverviewFlex,
+  buildSpendingFlex,
+  mealQuickReply,
+  categoryQuickReply,
+  spendingQuickReply,
+  fmt,
+} = require('./flex');
 const { config } = require('./config');
+
+// 記帳「用點的」暫存：使用者點了分類後，記住他接下來要記哪一類，等他輸入金額。
+// 放記憶體即可（短暫流程，Render 重啟清空可接受）。
+const pendingExpense = new Map(); // lineUid -> 分類名稱
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
@@ -47,6 +58,35 @@ async function handleEvent(event) {
   }
 
   const content = event.message.text.trim();
+
+  // ---- 記帳「用點的」流程（優先於其他判斷）----
+  // 1) 點「記帳」→ 跳出分類按鈕，不用打字選類別
+  if (content === '記帳') {
+    pendingExpense.delete(lineUid);
+    return [text('要記哪一類？點下面選 👇', categoryQuickReply)];
+  }
+  // 2) 點某個分類 → 記住這位使用者要記哪一類，等他輸入金額
+  if (content.startsWith('分類:')) {
+    const cat = content.slice(3).trim();
+    pendingExpense.set(lineUid, cat);
+    return [
+      text(`好，輸入「${cat}」的金額 💰\n直接打數字即可，例：50\n也可加說明，例：捷運 50`),
+    ];
+  }
+  // 3) 若正在等這位使用者輸入金額：像金額就記帳，否則放棄流程照常處理
+  if (pendingExpense.has(lineUid)) {
+    const cat = pendingExpense.get(lineUid);
+    const m = content.match(/^(.*?)\s*(\d{1,7}(?:\.\d{1,2})?)$/);
+    if (m) {
+      pendingExpense.delete(lineUid);
+      const name = (m[1] || '').trim() || cat;
+      const amount = Number(m[2]);
+      insertExpense({ userId: user.id, category: cat, name, amount });
+      const nameLine = name !== cat ? `・${name}` : '';
+      return [text(`✅ 已記帳：${cat}${nameLine}　$${fmt(amount)}`, spendingQuickReply)];
+    }
+    pendingExpense.delete(lineUid); // 不像金額，取消記帳、往下照常處理
+  }
 
   // ---- 圖文選單按鈕 / 特殊關鍵字（優先攔截，避免被當成餐點）----
   if (MENU_HINTS[content]) {
@@ -93,7 +133,9 @@ async function handleEvent(event) {
     };
     const [startFn, title] = startMap[intent.period] || startMap.month;
     const report = getSpending(user.id, startFn());
-    return [buildSpendingFlex(title, report)];
+    const card = buildSpendingFlex(title, report);
+    card.quickReply = spendingQuickReply; // 卡片下面附今日/本週/本月快捷鈕
+    return [card];
   }
 
   // ---- 記訓練（含消耗熱量）----
