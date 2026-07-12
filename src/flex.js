@@ -1,5 +1,6 @@
 // 組「今日總覽」的 Flex 卡片，以及記完餐的 Quick Reply 按鈕
 // 原則：超標只中性顯示數字（例 1,750/1,600 ⚠️），不出現任何勸戒或責備文字
+const { WORKOUTS, WORKOUT_KEYS } = require('./workouts');
 
 // 數字加千分位，null 顯示為「—」
 function fmt(n, digits = 0) {
@@ -152,6 +153,76 @@ const mealQuickReply = {
   ],
 };
 
+// 今日課表卡：列出選定部位的動作與組×次
+function buildWorkoutFlex(key) {
+  const w = WORKOUTS[key];
+  if (!w) return null;
+
+  const rows = w.items.map(([name, setsReps]) => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      { type: 'text', text: name, size: 'sm', color: '#333333', flex: 5, wrap: true },
+      {
+        type: 'text',
+        text: setsReps,
+        size: 'sm',
+        color: '#1F7A5A',
+        align: 'end',
+        flex: 3,
+        weight: 'bold',
+      },
+    ],
+  }));
+
+  return {
+    type: 'flex',
+    altText: `今日課表：${w.title}`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          { type: 'text', text: '今日課表', size: 'xs', color: '#FFFFFFCC' },
+          { type: 'text', text: w.title, weight: 'bold', size: 'lg', color: '#FFFFFF', wrap: true },
+        ],
+        backgroundColor: '#1F7A5A',
+        paddingAll: '16px',
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: '16px',
+        contents: rows,
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '主項做到次數上限且姿勢標準，下次加 2.5–5% 重量',
+            size: 'xxs',
+            color: '#8C8C8C',
+            wrap: true,
+          },
+        ],
+        paddingAll: '12px',
+      },
+    },
+  };
+}
+
+// 今日課表：選部位按鈕（點「今日課表」後跳出）
+const workoutPickerQuickReply = {
+  items: WORKOUT_KEYS.map((key) => ({
+    type: 'action',
+    action: { type: 'message', label: key, text: `課表:${key}` },
+  })),
+};
+
 // 取消鍵：放在流程中的 Quick Reply 最後一顆，隨時中斷
 const CANCEL_ITEM = {
   type: 'action',
@@ -203,10 +274,12 @@ const spendingQuickReply = {
 module.exports = {
   buildOverviewFlex,
   buildSpendingFlex,
+  buildWorkoutFlex,
   mealQuickReply,
   categoryQuickReply,
   mealPickerQuickReply,
   spendingQuickReply,
+  workoutPickerQuickReply,
   cancelQuickReply,
   fmt,
 };

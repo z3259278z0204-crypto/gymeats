@@ -17,10 +17,12 @@ const { estimateNutrition } = require('./ai');
 const {
   buildOverviewFlex,
   buildSpendingFlex,
+  buildWorkoutFlex,
   mealQuickReply,
   categoryQuickReply,
   mealPickerQuickReply,
   spendingQuickReply,
+  workoutPickerQuickReply,
   cancelQuickReply,
   fmt,
 } = require('./flex');
@@ -66,6 +68,20 @@ async function handleEvent(event) {
     const hadExpense = pendingExpense.delete(lineUid);
     const hadMeal = pendingMeal.delete(lineUid);
     return [text(hadExpense || hadMeal ? '已取消 👌' : '目前沒有進行中的記錄')];
+  }
+
+  // ---- 今日課表：點部位 → 出當天課表 ----
+  if (content === '今日課表') {
+    return [text('今天練哪個部位？👇', workoutPickerQuickReply)];
+  }
+  if (content.startsWith('課表:')) {
+    const key = content.slice(3).trim();
+    const card = buildWorkoutFlex(key);
+    if (card) {
+      card.quickReply = workoutPickerQuickReply; // 卡片下面可再切別的部位
+      return [card];
+    }
+    return [text('找不到這個部位，點「今日課表」重新選 💪')];
   }
 
   // ---- 記一餐「用點的」流程 ----
