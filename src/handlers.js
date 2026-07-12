@@ -8,6 +8,9 @@ const {
   getTodaySummary,
   insertExpense,
   getSpending,
+  insertLift,
+  getLiftMax,
+  getLiftProgress,
   todayStartMs,
   weekStartMs,
   monthStartMs,
@@ -203,6 +206,47 @@ async function handleEvent(event) {
     return [card];
   }
 
+  // ---- 重訓記錄（動作＋重量＋次數），並判斷是否破紀錄 ----
+  if (intent.type === 'lift') {
+    const prevMax = getLiftMax(user.id, intent.name);
+    insertLift({
+      userId: user.id,
+      name: intent.name,
+      weight: intent.weight,
+      reps: intent.reps,
+    });
+    const pr = prevMax === null || intent.weight > prevMax;
+    const prLine = pr
+      ? '\n🎉 新高！'
+      : `（目前最佳 ${fmt(prevMax, 1)} kg）`;
+    return [
+      text(
+        `✅ ${intent.name} ${fmt(intent.weight, 1)}kg × ${intent.reps}${prLine}\n查進步：看 ${intent.name}`
+      ),
+    ];
+  }
+
+  // ---- 查某動作進步趨勢 ----
+  if (intent.type === 'liftHistory') {
+    const rows = getLiftProgress(user.id, intent.name);
+    if (!rows.length) {
+      return [
+        text(`還沒有「${intent.name}」的紀錄 🤔\n練完打「${intent.name} 60 8」記一下（動作 重量 次數）`),
+      ];
+    }
+    let prev = null;
+    const lines = rows.map((r) => {
+      const md = r.day.slice(5).replace('-', '/'); // 07-13 -> 07/13
+      const up = prev !== null && r.topWeight > prev ? ' 🔺' : '';
+      prev = r.topWeight;
+      return `${md}　${fmt(r.topWeight, 1)} kg${up}`;
+    });
+    const best = Math.max(...rows.map((r) => r.topWeight));
+    return [
+      text(`📈 ${intent.name} 進步\n${lines.join('\n')}\n—\n最佳 ${fmt(best, 1)} kg`),
+    ];
+  }
+
   // ---- 記訓練（含消耗熱量）----
   if (intent.type === 'workout') {
     insertWorkout({
@@ -238,6 +282,7 @@ async function handleEvent(event) {
         '・記一餐：午餐 雞胸便當 120（金額可省略）\n' +
         '・記帳：房租 15000、交通 捷運 50、娛樂 電影 320\n' +
         '・查花費：本月花費 / 本週花費 / 今日花費\n' +
+        '・記重量：臥推 60 8（動作 重量 次數）／查進步：看 臥推\n' +
         '・記訓練：慢跑 30、重訓 45\n' +
         '・記體重：直接打數字，如 72.3\n' +
         '・設目標：目標 2600\n' +

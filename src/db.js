@@ -134,6 +134,43 @@ function setUserTarget(userId, target) {
   db.prepare('UPDATE users SET cal_target = ? WHERE id = ?').run(target, userId);
 }
 
+// ---- 重訓紀錄：寫入一組（動作＋重量＋次數）----
+function insertLift({ userId, name, weight, reps }) {
+  return db
+    .prepare(
+      `INSERT INTO workout_logs (user, ts, name, weight, reps)
+       VALUES (@user, @ts, @name, @weight, @reps)`
+    )
+    .run({ user: userId, ts: Date.now(), name, weight, reps });
+}
+
+// ---- 某動作目前最大重量（用來判斷是不是破紀錄）----
+function getLiftMax(userId, name) {
+  const row = db
+    .prepare(
+      `SELECT MAX(weight) AS m FROM workout_logs
+       WHERE user = ? AND name LIKE '%' || ? || '%' AND weight IS NOT NULL`
+    )
+    .get(userId, name);
+  return row && row.m != null ? row.m : null;
+}
+
+// ---- 某動作的進步：每天最大重量，最近幾天（由舊到新）----
+function getLiftProgress(userId, name, limit = 8) {
+  const rows = db
+    .prepare(
+      `SELECT date(ts / 1000, 'unixepoch', 'localtime') AS day,
+              MAX(weight) AS topWeight
+       FROM workout_logs
+       WHERE user = ? AND name LIKE '%' || ? || '%' AND weight IS NOT NULL
+       GROUP BY day
+       ORDER BY day DESC
+       LIMIT ?`
+    )
+    .all(userId, name, limit);
+  return rows.reverse(); // 由舊到新，方便看趨勢
+}
+
 // ---- 寫入一筆支出（通用記帳）----
 function insertExpense({ userId, category, name, amount }) {
   return db
@@ -242,6 +279,9 @@ module.exports = {
   getTodaySummary,
   insertExpense,
   getSpending,
+  insertLift,
+  getLiftMax,
+  getLiftProgress,
   todayStartMs,
   weekStartMs,
   monthStartMs,

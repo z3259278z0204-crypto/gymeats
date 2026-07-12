@@ -203,7 +203,7 @@ function buildWorkoutFlex(key) {
         contents: [
           {
             type: 'text',
-            text: '主項做到次數上限且姿勢標準，下次加 2.5–5% 重量',
+            text: '記重量：臥推 60 8（動作 重量 次數）　查進步：看 臥推',
             size: 'xxs',
             color: '#8C8C8C',
             wrap: true,

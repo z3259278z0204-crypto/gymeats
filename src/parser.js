@@ -136,6 +136,28 @@ function parseMessage(raw) {
     }
   }
 
+  // 1.9) 查進步：例「看 臥推」「進步 深蹲」→ 該動作重量趨勢
+  const progM = text.match(/^(?:看|進步|紀錄)\s+(.+)$/);
+  if (progM) {
+    return { type: 'liftHistory', name: progM[1].trim() };
+  }
+
+  // 1.95) 重訓記錄：例「臥推 60 8」「槓鈴深蹲 100 5」＝動作 重量 次數
+  //       用「兩個結尾數字」跟記餐（一個金額）區分。
+  const liftM = text.match(/^(.+?)\s+(\d{1,3}(?:\.\d{1,2})?)\s+(\d{1,2})$/);
+  if (liftM) {
+    const name = liftM[1].trim();
+    const weight = Number(liftM[2]);
+    const reps = Number(liftM[3]);
+    const notOther =
+      !MEAL_WORDS.includes(name) &&
+      !EXPENSE_ALIASES[name] &&
+      EXERCISE_KCAL[name] == null;
+    if (notOther && weight >= 1 && weight <= 500 && reps >= 1 && reps <= 50) {
+      return { type: 'lift', name, weight, reps };
+    }
+  }
+
   // 2) 純數字 → 體重（例：72.3）。也接受「體重 72.3」
   const weightMatch = text.match(/^(?:體重\s*)?(\d{1,3}(?:\.\d{1,2})?)$/);
   if (weightMatch) {
