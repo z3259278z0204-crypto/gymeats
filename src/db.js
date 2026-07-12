@@ -54,6 +54,17 @@ db.exec(`
     kcal     REAL,                        -- 消耗熱量估算
     FOREIGN KEY (user) REFERENCES users(id)
   );
+
+  -- 通用記帳：飲食以外的任何支出（房租、交通、娛樂…）
+  CREATE TABLE IF NOT EXISTS expenses (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    user     INTEGER NOT NULL,
+    ts       INTEGER NOT NULL,
+    category TEXT NOT NULL,               -- 分類，例：交通/居住/娛樂
+    name     TEXT,                        -- 品項說明，可空
+    amount   REAL NOT NULL,               -- 金額
+    FOREIGN KEY (user) REFERENCES users(id)
+  );
 `);
 
 // 舊資料庫若沒有 kcal 欄位，補上（新資料庫已含，這裡會被 catch 忽略）
@@ -123,11 +134,69 @@ function setUserTarget(userId, target) {
   db.prepare('UPDATE users SET cal_target = ? WHERE id = ?').run(target, userId);
 }
 
+// ---- 寫入一筆支出（通用記帳）----
+function insertExpense({ userId, category, name, amount }) {
+  return db
+    .prepare(
+      `INSERT INTO expenses (user, ts, category, name, amount)
+       VALUES (@user, @ts, @category, @name, @amount)`
+    )
+    .run({
+      user: userId,
+      ts: Date.now(),
+      category,
+      name: name || null,
+      amount,
+    });
+}
+
 // ---- 算「今天」的區間（當地時間 00:00 到現在）----
 function todayStartMs() {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   return now.getTime();
+}
+
+// ---- 算「本週」起點（當地時間週一 00:00）----
+function weekStartMs() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const day = now.getDay(); // 0=週日, 1=週一 ...
+  const diff = day === 0 ? 6 : day - 1; // 讓週一當一週開始
+  now.setDate(now.getDate() - diff);
+  return now.getTime();
+}
+
+// ---- 算「本月」起點（當地時間 1 號 00:00）----
+function monthStartMs() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+}
+
+// ---- 某段期間的花費：飲食(來自 food_logs.price) + 各類支出，合併並依金額排序 ----
+function getSpending(userId, startMs) {
+  const food = db
+    .prepare(
+      `SELECT COALESCE(SUM(price), 0) AS amount
+       FROM food_logs WHERE user = ? AND ts >= ? AND price IS NOT NULL`
+    )
+    .get(userId, startMs);
+
+  const rows = db
+    .prepare(
+      `SELECT category, SUM(amount) AS amount
+       FROM expenses WHERE user = ? AND ts >= ?
+       GROUP BY category`
+    )
+    .all(userId, startMs);
+
+  const cats = [];
+  if (food.amount > 0) cats.push({ category: '飲食', amount: food.amount });
+  for (const r of rows) cats.push({ category: r.category, amount: r.amount });
+  cats.sort((a, b) => b.amount - a.amount);
+
+  const total = cats.reduce((s, c) => s + c.amount, 0);
+  return { total, cats };
 }
 
 // ---- 今日總覽：把今天的餐加總，抓最新一筆體重 ----
@@ -171,4 +240,9 @@ module.exports = {
   insertWorkout,
   setUserTarget,
   getTodaySummary,
+  insertExpense,
+  getSpending,
+  todayStartMs,
+  weekStartMs,
+  monthStartMs,
 };

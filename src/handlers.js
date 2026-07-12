@@ -6,10 +6,15 @@ const {
   insertWorkout,
   setUserTarget,
   getTodaySummary,
+  insertExpense,
+  getSpending,
+  todayStartMs,
+  weekStartMs,
+  monthStartMs,
 } = require('./db');
 const { parseMessage } = require('./parser');
 const { estimateNutrition } = require('./ai');
-const { buildOverviewFlex, mealQuickReply, fmt } = require('./flex');
+const { buildOverviewFlex, buildSpendingFlex, mealQuickReply, fmt } = require('./flex');
 const { config } = require('./config');
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
@@ -61,6 +66,34 @@ async function handleEvent(event) {
   if (intent.type === 'setTarget') {
     setUserTarget(user.id, intent.target);
     return [text(`✅ 已把每日熱量目標設為 ${fmt(intent.target)} 大卡\n打「總覽」就會看到淨熱量對目標`)];
+  }
+
+  // ---- 通用記帳：記一筆支出 ----
+  if (intent.type === 'expense') {
+    insertExpense({
+      userId: user.id,
+      category: intent.category,
+      name: intent.name,
+      amount: intent.amount,
+    });
+    const nameLine = intent.name && intent.name !== intent.category ? `・${intent.name}` : '';
+    return [
+      text(
+        `✅ 已記帳：${intent.category}${nameLine}　$${fmt(intent.amount)}\n打「本月花費」看統計`
+      ),
+    ];
+  }
+
+  // ---- 查花費統計（今日／本週／本月）----
+  if (intent.type === 'expenseReport') {
+    const startMap = {
+      today: [todayStartMs, '今日花費'],
+      week: [weekStartMs, '本週花費'],
+      month: [monthStartMs, '本月花費'],
+    };
+    const [startFn, title] = startMap[intent.period] || startMap.month;
+    const report = getSpending(user.id, startFn());
+    return [buildSpendingFlex(title, report)];
   }
 
   // ---- 記訓練（含消耗熱量）----
@@ -115,6 +148,8 @@ async function handleEvent(event) {
     text(
       '我還看不懂這句 🤔\n' +
         '・記一餐：午餐 雞胸便當 120（金額可省略）\n' +
+        '・記帳：房租 15000、交通 捷運 50、娛樂 電影 320\n' +
+        '・查花費：本月花費 / 本週花費 / 今日花費\n' +
         '・記訓練：慢跑 30、重訓 45\n' +
         '・記體重：直接打數字，如 72.3\n' +
         '・設目標：目標 2600\n' +

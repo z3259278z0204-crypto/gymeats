@@ -30,6 +30,34 @@ const EXERCISE_KCAL = {
   重訓: 220, 健身: 220, 重量訓練: 220, 舉重: 220,
 };
 
+// 通用記帳的分類：關鍵字 → 分類名稱。第一個詞打中就歸到那一類。
+const EXPENSE_ALIASES = {
+  交通: '交通', 車資: '交通', 捷運: '交通', 公車: '交通', 高鐵: '交通',
+  火車: '交通', 計程車: '交通', uber: '交通', 油錢: '交通', 加油: '交通',
+  停車: '交通', 過路費: '交通',
+  居住: '居住', 房租: '居住', 水電: '居住', 電費: '居住', 水費: '居住',
+  瓦斯: '居住', 網路: '居住', 管理費: '居住',
+  娛樂: '娛樂', 電影: '娛樂', 遊戲: '娛樂', 唱歌: '娛樂', ktv: '娛樂',
+  旅遊: '娛樂', 門票: '娛樂',
+  購物: '購物', 衣服: '購物', 鞋: '購物', 日用品: '購物', 家電: '購物', '3c': '購物',
+  醫療: '醫療', 看醫生: '醫療', 看病: '醫療', 藥: '醫療', 診所: '醫療', 掛號: '醫療',
+  學習: '學習', 書: '學習', 課程: '學習', 報名費: '學習', 學費: '學習',
+  人情: '人情', 禮物: '人情', 紅包: '人情', 請客: '人情',
+  其他: '其他', 雜支: '其他',
+};
+
+// 查花費指令 → 期間
+const SPENDING_REPORT = {
+  今日花費: 'today', 今天花費: 'today',
+  本週花費: 'week', 這週花費: 'week', 週花費: 'week',
+  本月花費: 'month', 這個月花費: 'month', 月花費: 'month', 花費: 'month',
+};
+
+// 是不是金額（1~7 位數，可含小數），用來判斷記帳的金額
+function isAmount(text) {
+  return /^\d{1,7}(\.\d{1,2})?$/.test(text);
+}
+
 // 把中文數字符號、全形數字之類先正規化（簡單處理全形）
 function normalize(text) {
   return text
@@ -73,6 +101,39 @@ function parseMessage(raw) {
     }
     const kcal = Math.round((EXERCISE_KCAL[activity] * minutes) / 30);
     return { type: 'workout', activity, minutes, kcal };
+  }
+
+  // 1.7) 查花費：例「本月花費」「本週花費」「今日花費」
+  if (SPENDING_REPORT[text]) {
+    return { type: 'expenseReport', period: SPENDING_REPORT[text] };
+  }
+
+  // 1.8) 通用記帳：例「房租 15000」「交通 捷運 50」「支出 禮物 500」
+  //      規則：（可省略的「記帳/支出」前綴）＋ 分類詞 ＋ 品項(可省) ＋ 金額
+  {
+    let xt = text.split(' ');
+    const hadPrefix = ['記帳', '支出', '花錢'].includes(xt[0]);
+    if (hadPrefix) xt = xt.slice(1);
+
+    if (xt.length >= 1 && isAmount(xt[xt.length - 1])) {
+      const amount = Number(xt[xt.length - 1]);
+      const rest = xt.slice(0, xt.length - 1); // 金額以外的詞
+      const cat = rest.length ? EXPENSE_ALIASES[rest[0].toLowerCase()] : null;
+
+      if (cat) {
+        const middle = rest.slice(1).join(' ').trim();
+        return { type: 'expense', category: cat, name: middle || rest[0], amount };
+      }
+      // 有明確講「記帳/支出」但沒對到分類 → 先歸「其他」，仍然記下來
+      if (hadPrefix) {
+        return {
+          type: 'expense',
+          category: '其他',
+          name: rest.join(' ').trim() || null,
+          amount,
+        };
+      }
+    }
   }
 
   // 2) 純數字 → 體重（例：72.3）。也接受「體重 72.3」

@@ -88,6 +88,52 @@ function buildOverviewFlex(summary, calTarget) {
   };
 }
 
+// 花費統計卡：title 例「本月花費」，report 來自 db.getSpending()
+function buildSpendingFlex(title, report) {
+  const { total, cats } = report;
+
+  const rows = cats.length
+    ? cats.map((c) => row(c.category, `$${fmt(c.amount)}`))
+    : [
+        {
+          type: 'text',
+          text: '這段期間還沒有任何花費紀錄',
+          size: 'sm',
+          color: '#8C8C8C',
+          wrap: true,
+        },
+      ];
+
+  return {
+    type: 'flex',
+    altText: title,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          { type: 'text', text: title, weight: 'bold', size: 'lg', color: '#FFFFFF' },
+          { type: 'text', text: `共 ${cats.length} 類`, size: 'xs', color: '#FFFFFFCC' },
+        ],
+        backgroundColor: '#1F7A5A',
+        paddingAll: '16px',
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: '16px',
+        contents: [
+          ...rows,
+          { type: 'separator', margin: 'md' },
+          row('合計', `$${fmt(total)}`, true),
+        ],
+      },
+    },
+  };
+}
+
 // 記完一餐後的 Quick Reply 三顆按鈕（依需求：加照片／熱量估不準?／看今日總覽）
 const mealQuickReply = {
   items: [
@@ -106,4 +152,4 @@ const mealQuickReply = {
   ],
 };
 
-module.exports = { buildOverviewFlex, mealQuickReply, fmt };
+module.exports = { buildOverviewFlex, buildSpendingFlex, mealQuickReply, fmt };
