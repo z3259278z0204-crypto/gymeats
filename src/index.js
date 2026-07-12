@@ -21,22 +21,23 @@ const app = express();
 app.get('/', (req, res) => res.send('GymEats 機器人運作中 ✅'));
 
 // LINE 的 webhook 入口。line.middleware 會自動驗證簽章（確認訊息真的來自 LINE）
-app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
-  try {
-    const results = await Promise.all(
-      req.body.events.map(async (event) => {
-        const messages = await handleEvent(event);
-        if (messages && event.replyToken) {
-          // 用「回覆」而非「推播」，符合 MVP 需求且不耗推播額度（v11 用物件參數）
-          await client.replyMessage({ replyToken: event.replyToken, messages });
-        }
-      })
-    );
-    res.json(results);
-  } catch (err) {
-    console.error('處理 webhook 出錯：', err);
-    res.status(500).end();
-  }
+app.post('/webhook', line.middleware(lineConfig), (req, res) => {
+  // 先秒回 200 給 LINE，實際處理丟到背景，避免問 Claude、冷啟動太久
+  // 導致 LINE webhook 逾時、變成「已讀不回」。
+  res.status(200).end();
+
+  const events = (req.body && req.body.events) || [];
+  events.forEach(async (event) => {
+    try {
+      const messages = await handleEvent(event);
+      if (messages && event.replyToken) {
+        // 用「回覆」而非「推播」，符合 MVP 需求且不耗推播額度（v11 用物件參數）
+        await client.replyMessage({ replyToken: event.replyToken, messages });
+      }
+    } catch (err) {
+      console.error('處理事件出錯：', err);
+    }
+  });
 });
 
 app.listen(config.port, () => {
