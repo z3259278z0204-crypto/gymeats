@@ -13,3 +13,8 @@ data/*.db-shm
 # 系統雜檔
 .DS_Store
 *.log
+
+# 動作手冊產出（本機用，不入庫；用 node scripts/build-guide.js 重生）
+assets/fonts/
+assets/guide.html
+assets/*.pdf
