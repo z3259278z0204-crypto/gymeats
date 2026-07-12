@@ -152,6 +152,14 @@ const mealQuickReply = {
   ],
 };
 
+// 取消鍵：放在流程中的 Quick Reply 最後一顆，隨時中斷
+const CANCEL_ITEM = {
+  type: 'action',
+  action: { type: 'message', label: '✖️ 取消', text: '取消' },
+};
+// 只有取消鍵的 Quick Reply：輸入金額/品項時附上
+const cancelQuickReply = { items: [CANCEL_ITEM] };
+
 // 記帳分類按鈕：點「記帳」後跳出，點一下分類就不用打字選類別
 // 送出的文字用「分類:xxx」讓 handler 記住這位使用者接下來要記哪一類
 const CATEGORY_BUTTONS = [
@@ -159,10 +167,13 @@ const CATEGORY_BUTTONS = [
   ['💊', '醫療'], ['📚', '學習'], ['🎁', '人情'], ['📦', '其他'],
 ];
 const categoryQuickReply = {
-  items: CATEGORY_BUTTONS.map(([icon, name]) => ({
-    type: 'action',
-    action: { type: 'message', label: `${icon} ${name}`, text: `分類:${name}` },
-  })),
+  items: [
+    ...CATEGORY_BUTTONS.map(([icon, name]) => ({
+      type: 'action',
+      action: { type: 'message', label: `${icon} ${name}`, text: `分類:${name}` },
+    })),
+    CANCEL_ITEM,
+  ],
 };
 
 // 記一餐分餐別按鈕：點「記一餐」後跳出，點一下餐別就不用打字
@@ -171,10 +182,13 @@ const MEAL_BUTTONS = [
   ['🌅', '早餐'], ['🍜', '午餐'], ['🌙', '晚餐'], ['🌃', '宵夜'], ['🍪', '點心'],
 ];
 const mealPickerQuickReply = {
-  items: MEAL_BUTTONS.map(([icon, name]) => ({
-    type: 'action',
-    action: { type: 'message', label: `${icon} ${name}`, text: `餐別:${name}` },
-  })),
+  items: [
+    ...MEAL_BUTTONS.map(([icon, name]) => ({
+      type: 'action',
+      action: { type: 'message', label: `${icon} ${name}`, text: `餐別:${name}` },
+    })),
+    CANCEL_ITEM,
+  ],
 };
 
 // 查花費快捷鈕：附在統計卡下面，點一下切換今日／本週／本月
@@ -193,5 +207,6 @@ module.exports = {
   categoryQuickReply,
   mealPickerQuickReply,
   spendingQuickReply,
+  cancelQuickReply,
   fmt,
 };

@@ -21,6 +21,7 @@ const {
   categoryQuickReply,
   mealPickerQuickReply,
   spendingQuickReply,
+  cancelQuickReply,
   fmt,
 } = require('./flex');
 const { config } = require('./config');
@@ -60,6 +61,13 @@ async function handleEvent(event) {
 
   const content = event.message.text.trim();
 
+  // ---- 取消：中斷任何進行中的點選流程 ----
+  if (content === '取消') {
+    const hadExpense = pendingExpense.delete(lineUid);
+    const hadMeal = pendingMeal.delete(lineUid);
+    return [text(hadExpense || hadMeal ? '已取消 👌' : '目前沒有進行中的記錄')];
+  }
+
   // ---- 記一餐「用點的」流程 ----
   // 點「記一餐」→ 跳出餐別按鈕，不用打字選餐別
   if (content === '記一餐') {
@@ -73,7 +81,10 @@ async function handleEvent(event) {
     pendingExpense.delete(lineUid);
     pendingMeal.set(lineUid, meal);
     return [
-      text(`好，${meal}吃了什麼？🍽️\n打「品項 金額」，例：雞胸便當 120\n（金額可省略）`),
+      text(
+        `好，${meal}吃了什麼？🍽️\n打「品項 金額」，例：雞胸便當 120\n（金額可省略）`,
+        cancelQuickReply
+      ),
     ];
   }
   // 正在等這位使用者輸入這餐內容：有品項就記餐，否則放棄流程照常處理
@@ -105,7 +116,10 @@ async function handleEvent(event) {
     pendingMeal.delete(lineUid);
     pendingExpense.set(lineUid, cat);
     return [
-      text(`好，輸入「${cat}」的金額 💰\n直接打數字即可，例：50\n也可加說明，例：捷運 50`),
+      text(
+        `好，輸入「${cat}」的金額 💰\n直接打數字即可，例：50\n也可加說明，例：捷運 50`,
+        cancelQuickReply
+      ),
     ];
   }
   // 3) 若正在等這位使用者輸入金額：像金額就記帳，否則放棄流程照常處理
