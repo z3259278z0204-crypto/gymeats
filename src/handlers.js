@@ -21,6 +21,7 @@ const {
   buildOverviewFlex,
   buildSpendingFlex,
   buildWorkoutFlex,
+  buildLiftPicker,
   mealQuickReply,
   categoryQuickReply,
   mealPickerQuickReply,
@@ -31,10 +32,11 @@ const {
 } = require('./flex');
 const { config } = require('./config');
 
-// 「用點的」暫存：點了分類/餐別後，記住這位使用者接下來要記什麼，等他輸入內容。
+// 「用點的」暫存：點了分類/餐別/動作後，記住這位使用者接下來要記什麼，等他輸入內容。
 // 放記憶體即可（短暫流程，Render 重啟清空可接受）。
 const pendingExpense = new Map(); // lineUid -> 分類名稱
 const pendingMeal = new Map(); // lineUid -> 餐別名稱
+const pendingLift = new Map(); // lineUid -> { group, name } 要記重量的動作
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
@@ -70,7 +72,42 @@ async function handleEvent(event) {
   if (content === '取消') {
     pendingExpense.delete(lineUid);
     pendingMeal.delete(lineUid);
+    pendingLift.delete(lineUid);
     return [text('好的，取消了 👌')];
+  }
+
+  // ---- 課表記錄流程：點課表上的動作 → 問重量 → 記錄 ----
+  // 點某動作（text「記:肌群:動作」）
+  if (content.startsWith('記:')) {
+    const rest = content.slice(2);
+    const idx = rest.indexOf(':');
+    const group = idx >= 0 ? rest.slice(0, idx) : '';
+    const name = idx >= 0 ? rest.slice(idx + 1) : rest;
+    pendingExpense.delete(lineUid);
+    pendingMeal.delete(lineUid);
+    pendingLift.set(lineUid, { group, name });
+    return [text(`「${name}」這組多重？💪\n打「重量 次數」，例：60 8`, cancelQuickReply)];
+  }
+  // 正在等這位使用者輸入某動作的重量×次數
+  if (pendingLift.has(lineUid)) {
+    const { group, name } = pendingLift.get(lineUid);
+    const m = content.match(/^(\d{1,3}(?:\.\d{1,2})?)\s*(?:kg)?\s+(\d{1,2})(?:\s*下)?$/i);
+    if (m) {
+      pendingLift.delete(lineUid);
+      const weight = Number(m[1]);
+      const reps = Number(m[2]);
+      const prevMax = getLiftMax(user.id, name);
+      insertLift({ userId: user.id, name, weight, reps });
+      const pr = prevMax === null || weight > prevMax;
+      const prLine = pr ? '　🎉 新高！' : `（最佳 ${fmt(prevMax, 1)}kg）`;
+      const msg = text(
+        `✅ ${name} ${fmt(weight, 1)}kg × ${reps}${prLine}\n繼續點下一個動作，或「看 ${name}」查進步`
+      );
+      const picker = buildLiftPicker(group);
+      if (picker) msg.quickReply = picker;
+      return [msg];
+    }
+    pendingLift.delete(lineUid); // 不像「重量 次數」→ 放棄記錄，往下照常處理
   }
 
   // ---- 今日課表：點部位 → 出當天課表 ----
@@ -81,7 +118,7 @@ async function handleEvent(event) {
     const key = content.slice(3).trim();
     const card = buildWorkoutFlex(key);
     if (card) {
-      card.quickReply = workoutPickerQuickReply; // 卡片下面可再切別的部位
+      card.quickReply = buildLiftPicker(key); // 卡片下面＝點動作記重量＋換部位
       return [card];
     }
     return [text('找不到這個部位，點「今日課表」重新選 💪')];

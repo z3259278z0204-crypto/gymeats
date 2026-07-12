@@ -166,14 +166,14 @@ function buildWorkoutFlex(key) {
   const w = WORKOUTS[key];
   if (!w) return null;
 
-  const rows = w.items.map(([name, setsReps]) => ({
+  const rows = w.items.map((it) => ({
     type: 'box',
     layout: 'horizontal',
     contents: [
-      { type: 'text', text: name, size: 'sm', color: '#333333', flex: 5, wrap: true },
+      { type: 'text', text: it.name, size: 'sm', color: '#333333', flex: 5, wrap: true },
       {
         type: 'text',
-        text: setsReps,
+        text: it.sr,
         size: 'sm',
         color: '#1F7A5A',
         align: 'end',
@@ -211,7 +211,7 @@ function buildWorkoutFlex(key) {
         contents: [
           {
             type: 'text',
-            text: '記重量：臥推 60 8（動作 重量 次數）　查進步：看 臥推',
+            text: '👇 點下面動作記錄重量　·　查進步：看 臥推',
             size: 'xxs',
             color: '#8C8C8C',
             wrap: true,
@@ -220,6 +220,23 @@ function buildWorkoutFlex(key) {
         paddingAll: '12px',
       },
     },
+  };
+}
+
+// 課表卡下面的動作按鈕：點某動作 → 開始記錄那個動作的重量。
+// text 用「記:肌群:動作」帶著肌群，記完好再列同肌群的動作繼續記。
+function buildLiftPicker(key) {
+  const w = WORKOUTS[key];
+  if (!w) return null;
+  return {
+    items: [
+      ...w.items.map((it) => ({
+        type: 'action',
+        action: { type: 'message', label: it.name, text: `記:${key}:${it.name}` },
+      })),
+      { type: 'action', action: { type: 'message', label: '🔄 換部位', text: '今日課表' } },
+      CANCEL_ITEM,
+    ],
   };
 }
 
@@ -278,6 +295,7 @@ module.exports = {
   buildOverviewFlex,
   buildSpendingFlex,
   buildWorkoutFlex,
+  buildLiftPicker,
   mealQuickReply,
   categoryQuickReply,
   mealPickerQuickReply,
