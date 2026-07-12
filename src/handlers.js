@@ -68,9 +68,9 @@ async function handleEvent(event) {
 
   // ---- 取消：中斷任何進行中的點選流程 ----
   if (content === '取消') {
-    const hadExpense = pendingExpense.delete(lineUid);
-    const hadMeal = pendingMeal.delete(lineUid);
-    return [text(hadExpense || hadMeal ? '已取消 👌' : '目前沒有進行中的記錄')];
+    pendingExpense.delete(lineUid);
+    pendingMeal.delete(lineUid);
+    return [text('好的，取消了 👌')];
   }
 
   // ---- 今日課表：點部位 → 出當天課表 ----

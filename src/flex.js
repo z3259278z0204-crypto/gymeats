@@ -135,6 +135,14 @@ function buildSpendingFlex(title, report) {
   };
 }
 
+// 取消鍵：放在流程中的 Quick Reply 最後一顆，隨時中斷
+const CANCEL_ITEM = {
+  type: 'action',
+  action: { type: 'message', label: '✖️ 取消', text: '取消' },
+};
+// 只有取消鍵的 Quick Reply：輸入金額/品項時附上
+const cancelQuickReply = { items: [CANCEL_ITEM] };
+
 // 記完一餐後的 Quick Reply 三顆按鈕（依需求：加照片／熱量估不準?／看今日總覽）
 const mealQuickReply = {
   items: [
@@ -217,19 +225,14 @@ function buildWorkoutFlex(key) {
 
 // 今日課表：選部位按鈕（點「今日課表」後跳出）
 const workoutPickerQuickReply = {
-  items: WORKOUT_KEYS.map((key) => ({
-    type: 'action',
-    action: { type: 'message', label: key, text: `課表:${key}` },
-  })),
+  items: [
+    ...WORKOUT_KEYS.map((key) => ({
+      type: 'action',
+      action: { type: 'message', label: key, text: `課表:${key}` },
+    })),
+    CANCEL_ITEM,
+  ],
 };
-
-// 取消鍵：放在流程中的 Quick Reply 最後一顆，隨時中斷
-const CANCEL_ITEM = {
-  type: 'action',
-  action: { type: 'message', label: '✖️ 取消', text: '取消' },
-};
-// 只有取消鍵的 Quick Reply：輸入金額/品項時附上
-const cancelQuickReply = { items: [CANCEL_ITEM] };
 
 // 記帳分類按鈕：點「記帳」後跳出，點一下分類就不用打字選類別
 // 送出的文字用「分類:xxx」讓 handler 記住這位使用者接下來要記哪一類
