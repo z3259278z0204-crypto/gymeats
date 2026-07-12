@@ -19,18 +19,19 @@ const {
   buildSpendingFlex,
   mealQuickReply,
   categoryQuickReply,
+  mealPickerQuickReply,
   spendingQuickReply,
   fmt,
 } = require('./flex');
 const { config } = require('./config');
 
-// 記帳「用點的」暫存：使用者點了分類後，記住他接下來要記哪一類，等他輸入金額。
+// 「用點的」暫存：點了分類/餐別後，記住這位使用者接下來要記什麼，等他輸入內容。
 // 放記憶體即可（短暫流程，Render 重啟清空可接受）。
 const pendingExpense = new Map(); // lineUid -> 分類名稱
+const pendingMeal = new Map(); // lineUid -> 餐別名稱
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
-  記一餐: '記一餐直接打：餐別 品項 金額\n例：午餐 雞胸便當 120（金額可省略）',
   量體重: '量體重直接打數字就好\n例：72.3（也可加體脂：72.3 15）',
   快速補記: '快速補記：直接打品項即可，例「地瓜」\n沒打餐別和金額也能記',
   記訓練: '記訓練：打「運動＋時間」，例：\n・慢跑 30\n・重訓 45\n・游泳（沒打時間預設 30 分鐘）\n會自動算消耗熱量',
@@ -59,15 +60,49 @@ async function handleEvent(event) {
 
   const content = event.message.text.trim();
 
+  // ---- 記一餐「用點的」流程 ----
+  // 點「記一餐」→ 跳出餐別按鈕，不用打字選餐別
+  if (content === '記一餐') {
+    pendingExpense.delete(lineUid);
+    pendingMeal.delete(lineUid);
+    return [text('吃了哪一餐？點下面選 👇', mealPickerQuickReply)];
+  }
+  // 點某個餐別 → 記住這餐是哪一餐，等使用者輸入品項＋金額
+  if (content.startsWith('餐別:')) {
+    const meal = content.slice(3).trim();
+    pendingExpense.delete(lineUid);
+    pendingMeal.set(lineUid, meal);
+    return [
+      text(`好，${meal}吃了什麼？🍽️\n打「品項 金額」，例：雞胸便當 120\n（金額可省略）`),
+    ];
+  }
+  // 正在等這位使用者輸入這餐內容：有品項就記餐，否則放棄流程照常處理
+  if (pendingMeal.has(lineUid)) {
+    const meal = pendingMeal.get(lineUid);
+    const toks = content.split(/\s+/);
+    let price = null;
+    if (toks.length > 1 && /^\d{1,7}(\.\d{1,2})?$/.test(toks[toks.length - 1])) {
+      price = Number(toks.pop());
+    }
+    const name = toks.join(' ').trim();
+    if (name) {
+      pendingMeal.delete(lineUid);
+      return [await recordMeal(user.id, meal, name, price)];
+    }
+    pendingMeal.delete(lineUid); // 沒品項，放棄流程往下照常處理
+  }
+
   // ---- 記帳「用點的」流程（優先於其他判斷）----
   // 1) 點「記帳」→ 跳出分類按鈕，不用打字選類別
   if (content === '記帳') {
     pendingExpense.delete(lineUid);
+    pendingMeal.delete(lineUid);
     return [text('要記哪一類？點下面選 👇', categoryQuickReply)];
   }
   // 2) 點某個分類 → 記住這位使用者要記哪一類，等他輸入金額
   if (content.startsWith('分類:')) {
     const cat = content.slice(3).trim();
+    pendingMeal.delete(lineUid);
     pendingExpense.set(lineUid, cat);
     return [
       text(`好，輸入「${cat}」的金額 💰\n直接打數字即可，例：50\n也可加說明，例：捷運 50`),
@@ -163,26 +198,7 @@ async function handleEvent(event) {
 
   // ---- 記一餐 ----
   if (intent.type === 'food') {
-    const nutrition = await estimateNutrition(
-      intent.meal ? `${intent.meal} ${intent.name}` : intent.name
-    );
-    insertFood({
-      userId: user.id,
-      name: intent.name,
-      ...nutrition,
-      price: intent.price,
-    });
-
-    const mealLabel = intent.meal ? `${intent.meal}・` : '';
-    const priceLine = intent.price !== null ? `　花費 $${fmt(intent.price)}` : '';
-    const body =
-      nutrition.kcal !== null
-        ? `${fmt(nutrition.kcal)} 大卡（蛋白 ${fmt(nutrition.protein)}g／碳 ${fmt(
-            nutrition.carb
-          )}g／脂 ${fmt(nutrition.fat)}g）`
-        : '（熱量暫時估不出來，先幫你記下品項）';
-
-    return [text(`✅ ${mealLabel}${intent.name}\n${body}${priceLine}`, mealQuickReply)];
+    return [await recordMeal(user.id, intent.meal, intent.name, intent.price)];
   }
 
   // ---- 看不懂 ----
@@ -198,6 +214,23 @@ async function handleEvent(event) {
         '・看今日：打「總覽」'
     ),
   ];
+}
+
+// 記一餐：問 Claude 估熱量、寫入 food_logs、組回覆。meal 可為 null，price 可為 null。
+async function recordMeal(userId, meal, name, price) {
+  const nutrition = await estimateNutrition(meal ? `${meal} ${name}` : name);
+  insertFood({ userId, name, ...nutrition, price });
+
+  const mealLabel = meal ? `${meal}・` : '';
+  const priceLine = price !== null && price !== undefined ? `　花費 $${fmt(price)}` : '';
+  const body =
+    nutrition.kcal !== null
+      ? `${fmt(nutrition.kcal)} 大卡（蛋白 ${fmt(nutrition.protein)}g／碳 ${fmt(
+          nutrition.carb
+        )}g／脂 ${fmt(nutrition.fat)}g）`
+      : '（熱量暫時估不出來，先幫你記下品項）';
+
+  return text(`✅ ${mealLabel}${name}\n${body}${priceLine}`, mealQuickReply);
 }
 
 module.exports = { handleEvent };

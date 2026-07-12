@@ -165,6 +165,18 @@ const categoryQuickReply = {
   })),
 };
 
+// 記一餐分餐別按鈕：點「記一餐」後跳出，點一下餐別就不用打字
+// 送出的文字用「餐別:xxx」讓 handler 記住這餐是哪一餐
+const MEAL_BUTTONS = [
+  ['🌅', '早餐'], ['🍜', '午餐'], ['🌙', '晚餐'], ['🌃', '宵夜'], ['🍪', '點心'],
+];
+const mealPickerQuickReply = {
+  items: MEAL_BUTTONS.map(([icon, name]) => ({
+    type: 'action',
+    action: { type: 'message', label: `${icon} ${name}`, text: `餐別:${name}` },
+  })),
+};
+
 // 查花費快捷鈕：附在統計卡下面，點一下切換今日／本週／本月
 const spendingQuickReply = {
   items: [
@@ -179,6 +191,7 @@ module.exports = {
   buildSpendingFlex,
   mealQuickReply,
   categoryQuickReply,
+  mealPickerQuickReply,
   spendingQuickReply,
   fmt,
 };
