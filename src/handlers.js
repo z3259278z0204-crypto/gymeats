@@ -13,6 +13,7 @@ const {
   getLiftProgress,
   addCustomExercise,
   getCustomExercises,
+  deleteAllUserData,
   todayStartMs,
   weekStartMs,
   monthStartMs,
@@ -44,6 +45,35 @@ const pendingMeal = new Map(); // lineUid -> 餐別名稱
 const pendingLift = new Map(); // lineUid -> { group, name } 要記重量的動作
 const pendingWorkout = new Map(); // lineUid -> 本次抽中的動作陣列（讓卡片與續記按鈕一致）
 const pendingCustom = new Map(); // lineUid -> 肌群名稱，正在等使用者輸入要新增的動作名稱
+const pendingDelete = new Set(); // lineUid：正在等使用者確認「刪除我的資料」
+
+// 隱私告知（打「隱私」會看到）：試用者知情同意用
+const PRIVACY_TEXT =
+  '🔒 隱私說明\n' +
+  '\n' +
+  '1. 會記錄：你輸入的飲食、花費、體重體脂、訓練記錄，以及你的 LINE 識別碼。\n' +
+  '2. 存放：資料存在雲端伺服器（Render，位於新加坡）。\n' +
+  '3. 食物名稱：為了估熱量，會傳給 AI 服務（Anthropic）處理，不會用於訓練。\n' +
+  '4. 開發者：本機器人為個人專案，開發者技術上可看到資料，僅供除錯、不會外流或另作他用。\n' +
+  '5. 你的權利：隨時打「刪除我的資料」可把你的所有記錄永久清除。\n' +
+  '\n' +
+  '有疑慮歡迎直接告訴開發者 🙌';
+
+// 使用說明（打「說明」或「使用說明」會看到）
+const HELP_TEXT =
+  '📖 練食記 使用說明\n' +
+  '\n' +
+  '・記一餐：打「午餐 雞胸便當 120」（金額可省略）\n' +
+  '・量體重：直接打數字，例「72.3」或「72.3 15」(體重 體脂)\n' +
+  '・記帳：打「房租 15000」「交通 捷運 50」\n' +
+  '・查花費：打「今日/本週/本月花費」\n' +
+  '・今日課表：排當天要練的動作，可加自訂動作\n' +
+  '・記重訓：打「臥推 60 8」(動作 重量 次數)\n' +
+  '・查進步：打「看 臥推」\n' +
+  '・總覽：打「總覽」看今天吃了多少\n' +
+  '\n' +
+  '🔒 隱私：打「隱私」\n' +
+  '🗑️ 清除資料：打「刪除我的資料」';
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
@@ -95,7 +125,35 @@ async function handleEvent(event) {
     pendingLift.delete(lineUid);
     pendingWorkout.delete(lineUid);
     pendingCustom.delete(lineUid);
+    pendingDelete.delete(lineUid);
     return [text('好的，取消了 👌')];
+  }
+
+  // ---- 使用說明 / 隱私 ----
+  if (content === '說明' || content === '使用說明' || content === '幫助') {
+    return [text(HELP_TEXT)];
+  }
+  if (content === '隱私' || content === '隱私權' || content === '隱私說明') {
+    return [text(PRIVACY_TEXT)];
+  }
+
+  // ---- 刪除我的資料：先確認，避免手誤 ----
+  if (content === '刪除我的資料' || content === '刪除資料' || content === '清除我的資料') {
+    pendingDelete.add(lineUid);
+    return [
+      text(
+        '⚠️ 確定要刪除你的「全部」記錄嗎？\n（飲食、體重、花費、訓練、自訂動作都會清空，無法復原）\n\n確定請回覆「確定刪除」，或按取消。',
+        cancelQuickReply
+      ),
+    ];
+  }
+  if (pendingDelete.has(lineUid)) {
+    if (content === '確定刪除') {
+      pendingDelete.delete(lineUid);
+      const n = deleteAllUserData(user.id);
+      return [text(`🗑️ 已刪除你的全部記錄（共 ${n} 筆），資料已清空。\n感謝試用 🙏`)];
+    }
+    pendingDelete.delete(lineUid); // 沒回「確定刪除」→ 當作放棄，往下照常處理
   }
 
   // ---- 課表記錄流程：點課表上的動作 → 問重量 → 記錄 ----

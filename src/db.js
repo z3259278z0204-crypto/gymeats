@@ -221,6 +221,20 @@ function removeCustomExercise({ userId, group, name }) {
   return info.changes > 0;
 }
 
+// ---- 刪除一位使用者的所有記錄（飲食/體重/訓練/花費/自訂動作），回傳刪除總筆數 ----
+// 帳號本身保留（下次傳訊會回到全新狀態），符合「刪除我的資料」需求
+function deleteAllUserData(userId) {
+  const tables = ['food_logs', 'body_logs', 'workout_logs', 'expenses', 'custom_exercises'];
+  const tx = db.transaction((uid) => {
+    let n = 0;
+    for (const t of tables) {
+      n += db.prepare(`DELETE FROM ${t} WHERE user = ?`).run(uid).changes;
+    }
+    return n;
+  });
+  return tx(userId);
+}
+
 // ---- 算「今天」的區間（當地時間 00:00 到現在）----
 function todayStartMs() {
   const now = new Date();
@@ -319,6 +333,7 @@ module.exports = {
   addCustomExercise,
   getCustomExercises,
   removeCustomExercise,
+  deleteAllUserData,
   todayStartMs,
   weekStartMs,
   monthStartMs,
