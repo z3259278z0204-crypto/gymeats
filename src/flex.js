@@ -231,12 +231,15 @@ function buildLiftPicker(key, items) {
   const w = WORKOUTS[key];
   if (!w) return null;
   const list = items || w.items;
+  // LINE quickReply 上限 13 顆：保留 4 顆給「新增動作/換一組/換部位/取消」，其餘給動作
+  const actionBtns = list.slice(0, 13 - 4).map((it) => ({
+    type: 'action',
+    action: { type: 'message', label: it.name, text: `記:${key}:${it.name}` },
+  }));
   return {
     items: [
-      ...list.map((it) => ({
-        type: 'action',
-        action: { type: 'message', label: it.name, text: `記:${key}:${it.name}` },
-      })),
+      ...actionBtns,
+      { type: 'action', action: { type: 'message', label: '➕ 新增動作', text: `新增動作:${key}` } },
       { type: 'action', action: { type: 'message', label: '🎲 換一組', text: `課表:${key}` } },
       { type: 'action', action: { type: 'message', label: '🔄 換部位', text: '今日課表' } },
       CANCEL_ITEM,

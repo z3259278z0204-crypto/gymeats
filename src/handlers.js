@@ -11,6 +11,8 @@ const {
   insertLift,
   getLiftMax,
   getLiftProgress,
+  addCustomExercise,
+  getCustomExercises,
   todayStartMs,
   weekStartMs,
   monthStartMs,
@@ -32,7 +34,7 @@ const {
   buildStretchFlex,
   stretchQuickReply,
 } = require('./flex');
-const { pickWorkout, pickStretch } = require('./workouts');
+const { pickWorkout, pickStretch, WORKOUT_KEYS } = require('./workouts');
 const { config } = require('./config');
 
 // 「用點的」暫存：點了分類/餐別/動作後，記住這位使用者接下來要記什麼，等他輸入內容。
@@ -41,6 +43,7 @@ const pendingExpense = new Map(); // lineUid -> 分類名稱
 const pendingMeal = new Map(); // lineUid -> 餐別名稱
 const pendingLift = new Map(); // lineUid -> { group, name } 要記重量的動作
 const pendingWorkout = new Map(); // lineUid -> 本次抽中的動作陣列（讓卡片與續記按鈕一致）
+const pendingCustom = new Map(); // lineUid -> 肌群名稱，正在等使用者輸入要新增的動作名稱
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
@@ -57,6 +60,19 @@ function text(t, quickReply) {
   const msg = { type: 'text', text: t };
   if (quickReply) msg.quickReply = quickReply;
   return msg;
+}
+
+// 組某肌群的今日課表卡：隨機抽 5-6 個內建動作 ＋ 這位使用者的自訂動作
+// 回傳可直接回覆的 Flex 卡（含下方動作按鈕）；找不到肌群回 null
+function buildTodayWorkout(lineUid, userId, key) {
+  const items = pickWorkout(key);
+  if (!items) return null;
+  const customs = getCustomExercises(userId, key).map((name) => ({ name, sr: '自訂' }));
+  const all = [...items, ...customs];
+  pendingWorkout.set(lineUid, all); // 記住這組，續記時按鈕一致
+  const card = buildWorkoutFlex(key, all);
+  card.quickReply = buildLiftPicker(key, all);
+  return card;
 }
 
 // 處理一個 LINE event，回傳「要回覆的訊息陣列」（或 null 表示不回）
@@ -78,6 +94,7 @@ async function handleEvent(event) {
     pendingMeal.delete(lineUid);
     pendingLift.delete(lineUid);
     pendingWorkout.delete(lineUid);
+    pendingCustom.delete(lineUid);
     return [text('好的，取消了 👌')];
   }
 
@@ -127,14 +144,40 @@ async function handleEvent(event) {
       stretchCard.quickReply = stretchQuickReply;
       return [stretchCard];
     }
-    const items = pickWorkout(key); // 隨機抽 5-6 個，每次不同
-    const card = buildWorkoutFlex(key, items);
-    if (card) {
-      pendingWorkout.set(lineUid, items); // 記住這次抽選，續記時按鈕一致
-      card.quickReply = buildLiftPicker(key, items); // 卡片下面＝點動作記重量＋換一組/換部位
-      return [card];
-    }
+    const card = buildTodayWorkout(lineUid, user.id, key); // 內建隨機 5-6 個 ＋ 自訂動作
+    if (card) return [card];
     return [text('找不到這個部位，點「今日課表」重新選 💪')];
+  }
+
+  // ---- 新增自訂動作：點「➕ 新增動作」→ 輸入名稱 → 永久加進該肌群清單 ----
+  if (content.startsWith('新增動作:')) {
+    const group = content.slice('新增動作:'.length).trim();
+    if (!WORKOUT_KEYS.includes(group)) {
+      return [text('找不到這個部位，點「今日課表」重新選 💪')];
+    }
+    pendingExpense.delete(lineUid);
+    pendingMeal.delete(lineUid);
+    pendingLift.delete(lineUid);
+    pendingCustom.set(lineUid, group);
+    return [text(`要新增什麼動作到「${group}」？\n直接打動作名稱就好，例如：滑輪面拉`, cancelQuickReply)];
+  }
+  // 正在等使用者輸入要新增的動作名稱
+  if (pendingCustom.has(lineUid)) {
+    const group = pendingCustom.get(lineUid);
+    // 看起來像別的指令（點了其他按鈕）→ 放棄新增，往下照常處理
+    const looksLikeCommand =
+      content.includes(':') || content.includes('：') || content === '今日課表' ||
+      content.startsWith('課表') || content.startsWith('新增動作') || content.startsWith('看 ');
+    if (!looksLikeCommand && content.length <= 20) {
+      pendingCustom.delete(lineUid);
+      const added = addCustomExercise({ userId: user.id, group, name: content });
+      const msg = added
+        ? `✅ 已把「${content}」加進「${group}」清單，之後點課表就看得到`
+        : `「${content}」已經在「${group}」清單裡囉`;
+      const card = buildTodayWorkout(lineUid, user.id, group);
+      return card ? [text(msg), card] : [text(msg)];
+    }
+    pendingCustom.delete(lineUid); // 放棄新增，往下照常處理
   }
 
   // ---- 記一餐「用點的」流程 ----

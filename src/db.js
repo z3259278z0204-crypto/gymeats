@@ -65,6 +65,16 @@ db.exec(`
     amount   REAL NOT NULL,               -- 金額
     FOREIGN KEY (user) REFERENCES users(id)
   );
+
+  -- 使用者自訂動作：加進某肌群課表的個人動作（課表沒列、但自己會做的）
+  CREATE TABLE IF NOT EXISTS custom_exercises (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    user  INTEGER NOT NULL,
+    grp   TEXT NOT NULL,                  -- 肌群：胸/背/肩膀/腿
+    name  TEXT NOT NULL,                  -- 動作名稱
+    UNIQUE(user, grp, name),
+    FOREIGN KEY (user) REFERENCES users(id)
+  );
 `);
 
 // 舊資料庫若沒有 kcal 欄位，補上（新資料庫已含，這裡會被 catch 忽略）
@@ -187,6 +197,30 @@ function insertExpense({ userId, category, name, amount }) {
     });
 }
 
+// ---- 自訂動作：加一個到某肌群（重複會被忽略），回傳是否真的新增 ----
+function addCustomExercise({ userId, group, name }) {
+  const info = db
+    .prepare('INSERT OR IGNORE INTO custom_exercises (user, grp, name) VALUES (?, ?, ?)')
+    .run(userId, group, name);
+  return info.changes > 0;
+}
+
+// ---- 自訂動作：拿某使用者某肌群的自訂動作名稱清單 ----
+function getCustomExercises(userId, group) {
+  return db
+    .prepare('SELECT name FROM custom_exercises WHERE user = ? AND grp = ? ORDER BY id')
+    .all(userId, group)
+    .map((r) => r.name);
+}
+
+// ---- 自訂動作：刪掉某使用者某肌群的一個自訂動作，回傳是否刪到 ----
+function removeCustomExercise({ userId, group, name }) {
+  const info = db
+    .prepare('DELETE FROM custom_exercises WHERE user = ? AND grp = ? AND name = ?')
+    .run(userId, group, name);
+  return info.changes > 0;
+}
+
 // ---- 算「今天」的區間（當地時間 00:00 到現在）----
 function todayStartMs() {
   const now = new Date();
@@ -282,6 +316,9 @@ module.exports = {
   insertLift,
   getLiftMax,
   getLiftProgress,
+  addCustomExercise,
+  getCustomExercises,
+  removeCustomExercise,
   todayStartMs,
   weekStartMs,
   monthStartMs,
