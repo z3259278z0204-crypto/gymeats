@@ -145,13 +145,13 @@ function setUserTarget(userId, target) {
 }
 
 // ---- 重訓紀錄：寫入一組（動作＋重量＋次數）----
-function insertLift({ userId, name, weight, reps }) {
+function insertLift({ userId, name, weight, reps, kcal }) {
   return db
     .prepare(
-      `INSERT INTO workout_logs (user, ts, name, weight, reps)
-       VALUES (@user, @ts, @name, @weight, @reps)`
+      `INSERT INTO workout_logs (user, ts, name, weight, reps, kcal)
+       VALUES (@user, @ts, @name, @weight, @reps, @kcal)`
     )
-    .run({ user: userId, ts: Date.now(), name, weight, reps });
+    .run({ user: userId, ts: Date.now(), name, weight, reps, kcal: kcal ?? null });
 }
 
 // ---- 某動作目前最大重量（用來判斷是不是破紀錄）----
