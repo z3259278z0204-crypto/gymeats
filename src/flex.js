@@ -1,6 +1,7 @@
 // 組「今日總覽」的 Flex 卡片，以及記完餐的 Quick Reply 按鈕
 // 原則：超標只中性顯示數字（例 1,750/1,600 ⚠️），不出現任何勸戒或責備文字
 const { WORKOUTS, WORKOUT_KEYS } = require('./workouts');
+const STRETCH_KEY = '伸展放鬆';
 
 // 數字加千分位，null 顯示為「—」
 function fmt(n, digits = 0) {
@@ -162,11 +163,12 @@ const mealQuickReply = {
 };
 
 // 今日課表卡：列出選定部位的動作與組×次
-function buildWorkoutFlex(key) {
+function buildWorkoutFlex(key, items) {
   const w = WORKOUTS[key];
   if (!w) return null;
+  const list = items || w.items;
 
-  const rows = w.items.map((it) => ({
+  const rows = list.map((it) => ({
     type: 'box',
     layout: 'horizontal',
     contents: [
@@ -225,28 +227,100 @@ function buildWorkoutFlex(key) {
 
 // 課表卡下面的動作按鈕：點某動作 → 開始記錄那個動作的重量。
 // text 用「記:肌群:動作」帶著肌群，記完好再列同肌群的動作繼續記。
-function buildLiftPicker(key) {
+function buildLiftPicker(key, items) {
   const w = WORKOUTS[key];
   if (!w) return null;
+  const list = items || w.items;
   return {
     items: [
-      ...w.items.map((it) => ({
+      ...list.map((it) => ({
         type: 'action',
         action: { type: 'message', label: it.name, text: `記:${key}:${it.name}` },
       })),
+      { type: 'action', action: { type: 'message', label: '🎲 換一組', text: `課表:${key}` } },
       { type: 'action', action: { type: 'message', label: '🔄 換部位', text: '今日課表' } },
       CANCEL_ITEM,
     ],
   };
 }
 
-// 今日課表：選部位按鈕（點「今日課表」後跳出）
+// 伸展放鬆卡：列出抽中的伸展動作與停留呼吸數（不記重量）
+function buildStretchFlex(items) {
+  const rows = items.map((it) => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      { type: 'text', text: it.name, size: 'sm', color: '#333333', flex: 5, wrap: true },
+      {
+        type: 'text',
+        text: it.hold,
+        size: 'xs',
+        color: '#7A5AA0',
+        align: 'end',
+        flex: 4,
+        weight: 'bold',
+        wrap: true,
+      },
+    ],
+  }));
+
+  return {
+    type: 'flex',
+    altText: '伸展放鬆',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          { type: 'text', text: '訓練後收操', size: 'xs', color: '#FFFFFFCC' },
+          { type: 'text', text: '🧘 伸展放鬆', weight: 'bold', size: 'lg', color: '#FFFFFF' },
+        ],
+        backgroundColor: '#7A5AA0',
+        paddingAll: '16px',
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: '16px',
+        contents: rows,
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '慢慢伸展、自然深呼吸、不憋氣，痠緊處停留久一點',
+            size: 'xxs',
+            color: '#8C8C8C',
+            wrap: true,
+          },
+        ],
+        paddingAll: '12px',
+      },
+    },
+  };
+}
+
+// 伸展卡下面的按鈕：換一組／回今日課表（伸展不需記錄，所以沒有動作記錄鈕）
+const stretchQuickReply = {
+  items: [
+    { type: 'action', action: { type: 'message', label: '🎲 換一組', text: `課表:${STRETCH_KEY}` } },
+    { type: 'action', action: { type: 'message', label: '🔄 回課表', text: '今日課表' } },
+    CANCEL_ITEM,
+  ],
+};
+
+// 今日課表：選部位按鈕（點「今日課表」後跳出），最後一顆是伸展放鬆
 const workoutPickerQuickReply = {
   items: [
     ...WORKOUT_KEYS.map((key) => ({
       type: 'action',
       action: { type: 'message', label: key, text: `課表:${key}` },
     })),
+    { type: 'action', action: { type: 'message', label: '🧘 伸展放鬆', text: `課表:${STRETCH_KEY}` } },
     CANCEL_ITEM,
   ],
 };
@@ -296,6 +370,8 @@ module.exports = {
   buildSpendingFlex,
   buildWorkoutFlex,
   buildLiftPicker,
+  buildStretchFlex,
+  stretchQuickReply,
   mealQuickReply,
   categoryQuickReply,
   mealPickerQuickReply,

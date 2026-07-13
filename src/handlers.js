@@ -29,7 +29,10 @@ const {
   workoutPickerQuickReply,
   cancelQuickReply,
   fmt,
+  buildStretchFlex,
+  stretchQuickReply,
 } = require('./flex');
+const { pickWorkout, pickStretch } = require('./workouts');
 const { config } = require('./config');
 
 // 「用點的」暫存：點了分類/餐別/動作後，記住這位使用者接下來要記什麼，等他輸入內容。
@@ -37,6 +40,7 @@ const { config } = require('./config');
 const pendingExpense = new Map(); // lineUid -> 分類名稱
 const pendingMeal = new Map(); // lineUid -> 餐別名稱
 const pendingLift = new Map(); // lineUid -> { group, name } 要記重量的動作
+const pendingWorkout = new Map(); // lineUid -> 本次抽中的動作陣列（讓卡片與續記按鈕一致）
 
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
@@ -73,6 +77,7 @@ async function handleEvent(event) {
     pendingExpense.delete(lineUid);
     pendingMeal.delete(lineUid);
     pendingLift.delete(lineUid);
+    pendingWorkout.delete(lineUid);
     return [text('好的，取消了 👌')];
   }
 
@@ -103,7 +108,7 @@ async function handleEvent(event) {
       const msg = text(
         `✅ ${name} ${fmt(weight, 1)}kg × ${reps}${prLine}\n繼續點下一個動作，或「看 ${name}」查進步`
       );
-      const picker = buildLiftPicker(group);
+      const picker = buildLiftPicker(group, pendingWorkout.get(lineUid));
       if (picker) msg.quickReply = picker;
       return [msg];
     }
@@ -116,9 +121,17 @@ async function handleEvent(event) {
   }
   if (content.startsWith('課表:')) {
     const key = content.slice(3).trim();
-    const card = buildWorkoutFlex(key);
+    if (key === '伸展放鬆') { // 伸展放鬆：只顯示動作與停留呼吸數，不記重量
+      pendingWorkout.delete(lineUid);
+      const stretchCard = buildStretchFlex(pickStretch());
+      stretchCard.quickReply = stretchQuickReply;
+      return [stretchCard];
+    }
+    const items = pickWorkout(key); // 隨機抽 5-6 個，每次不同
+    const card = buildWorkoutFlex(key, items);
     if (card) {
-      card.quickReply = buildLiftPicker(key); // 卡片下面＝點動作記重量＋換部位
+      pendingWorkout.set(lineUid, items); // 記住這次抽選，續記時按鈕一致
+      card.quickReply = buildLiftPicker(key, items); // 卡片下面＝點動作記重量＋換一組/換部位
       return [card];
     }
     return [text('找不到這個部位，點「今日課表」重新選 💪')];
