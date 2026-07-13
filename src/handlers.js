@@ -102,6 +102,14 @@ function isCommandLike(c) {
   return false;
 }
 
+// 這句看起來是不是「體重」（純數字，或「體重 體脂」兩個數字且第一個≥20）。
+// 用在記餐等品項時：使用者若打數字，多半是想記體重而非把餐點取名叫數字。
+function looksLikeWeight(c) {
+  if (/^\d{1,3}(\.\d{1,2})?$/.test(c)) return true;
+  const m = c.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(\d{1,2}(?:\.\d)?)%?$/);
+  return !!(m && Number(m[1]) >= 20);
+}
+
 // 純文字回覆的小工具
 function text(t, quickReply) {
   const msg = { type: 'text', text: t };
@@ -246,8 +254,8 @@ async function handleEvent(event) {
   // 正在等使用者輸入要新增的動作名稱
   if (pendingCustom.has(lineUid)) {
     const group = pendingCustom.get(lineUid);
-    // 改點別的功能指令 → 放棄新增；名稱過長也不收
-    if (!isCommandLike(content) && content.length <= 20) {
+    // 改點別的功能指令 → 放棄新增；名稱過長、或純數字（沒意義）也不收
+    if (!isCommandLike(content) && content.length <= 20 && !/^\d+(\.\d+)?$/.test(content)) {
       pendingCustom.delete(lineUid);
       const added = addCustomExercise({ userId: user.id, group, name: content });
       const msg = added
@@ -279,7 +287,10 @@ async function handleEvent(event) {
     ];
   }
   // 正在等這位使用者輸入這餐內容：有品項就記餐，否則放棄流程照常處理
-  if (pendingMeal.has(lineUid)) {
+  // （若打的是體重樣式的數字，放棄記餐、往下當體重處理，不把餐點取名叫數字）
+  if (pendingMeal.has(lineUid) && looksLikeWeight(content)) {
+    pendingMeal.delete(lineUid);
+  } else if (pendingMeal.has(lineUid)) {
     const meal = pendingMeal.get(lineUid);
     const toks = content.split(/\s+/);
     let price = null;

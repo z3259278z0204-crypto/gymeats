@@ -221,8 +221,9 @@ function removeCustomExercise({ userId, group, name }) {
   return info.changes > 0;
 }
 
-// ---- 刪除一位使用者的所有記錄（飲食/體重/訓練/花費/自訂動作），回傳刪除總筆數 ----
-// 帳號本身保留（下次傳訊會回到全新狀態），符合「刪除我的資料」需求
+// ---- 刪除一位使用者的所有資料，回傳刪除的「記錄」筆數 ----
+// 連帳號本身(users，含 LINE 識別碼與目標設定)一起刪，真正清空、識別碼不殘留。
+// 下次傳訊 getOrCreateUser 會重建成全新帳號。
 function deleteAllUserData(userId) {
   const tables = ['food_logs', 'body_logs', 'workout_logs', 'expenses', 'custom_exercises'];
   const tx = db.transaction((uid) => {
@@ -230,6 +231,7 @@ function deleteAllUserData(userId) {
     for (const t of tables) {
       n += db.prepare(`DELETE FROM ${t} WHERE user = ?`).run(uid).changes;
     }
+    db.prepare('DELETE FROM users WHERE id = ?').run(uid); // 帳號框架也刪，識別碼不留
     return n;
   });
   return tx(userId);
