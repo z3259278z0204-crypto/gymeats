@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1000px; height: 1000px; }
+  body {
+    background: #F1EDE3;              /* 溫暖米色底 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: "PingFang TC", "Heiti TC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* LINE 頭像會裁成圓形，重要元素都集中在中央安全區 */
+  .dumbbell { margin-bottom: 66px; }
+  .title {
+    font-size: 190px;
+    font-weight: 800;
+    color: #1F6E52;                  /* 深綠 */
+    letter-spacing: 14px;
+    margin-right: -14px;             /* 抵銷末字後的字距，保持視覺置中 */
+    line-height: 1;
+  }
+  .sub {
+    margin-top: 40px;
+    font-size: 48px;
+    font-weight: 600;
+    letter-spacing: 18px;
+    margin-right: -18px;
+    color: #A6B5A4;                  /* 低彩度灰綠 */
+    font-family: "Helvetica Neue", Arial, sans-serif;
+  }
+  .rule {
+    width: 130px;
+    height: 6px;
+    border-radius: 3px;
+    background: #D8B24A;             /* 一抹暖金，增加手作質感 */
+    margin-top: 46px;
+  }
+</style>
+</head>
+<body>
+  <svg class="dumbbell" width="320" height="128" viewBox="0 0 320 128">
+    <!-- 橫桿 -->
+    <rect x="78" y="55" width="164" height="18" rx="9" fill="#1F6E52"/>
+    <!-- 左側槓片（外小內大） -->
+    <rect x="46" y="30" width="28" height="68" rx="11" fill="#1F6E52"/>
+    <rect x="16" y="44" width="24" height="40" rx="10" fill="#1F6E52"/>
+    <!-- 右側槓片 -->
+    <rect x="246" y="30" width="28" height="68" rx="11" fill="#1F6E52"/>
+    <rect x="280" y="44" width="24" height="40" rx="10" fill="#1F6E52"/>
+  </svg>
+  <div class="title">練食記</div>
+  <div class="sub">GYMEATS</div>
+  <div class="rule"></div>
+</body>
+</html>

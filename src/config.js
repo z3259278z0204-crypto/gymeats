@@ -11,6 +11,10 @@ const config = {
     model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
   },
   port: Number(process.env.PORT) || 3000,
+  // Apple 捷徑連動用的密碼（環境變數 APPLE_TOKEN）。捷徑送資料時要帶上這串當通行證
+  apple: {
+    token: process.env.APPLE_TOKEN || '',
+  },
   // 每日熱量目標預設值（環境變數 CAL_TARGET）。使用者若用「目標 XXXX」設定會覆蓋這個
   calTargetDefault: Number(process.env.CAL_TARGET) || null,
 };

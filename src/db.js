@@ -139,6 +139,18 @@ function insertWorkout({ userId, name, duration, kcal }) {
     });
 }
 
+// ---- Apple 活動能量：每天只留一筆，重覆傳入就覆蓋（避免整天累加）----
+const APPLE_ENERGY_NAME = 'Apple 活動能量';
+function upsertAppleEnergy({ userId, kcal }) {
+  const start = todayStartMs();
+  db.prepare(
+    'DELETE FROM workout_logs WHERE user = ? AND name = ? AND ts >= ?'
+  ).run(userId, APPLE_ENERGY_NAME, start);
+  db.prepare(
+    'INSERT INTO workout_logs (user, ts, name, kcal) VALUES (?, ?, ?, ?)'
+  ).run(userId, Date.now(), APPLE_ENERGY_NAME, kcal);
+}
+
 // ---- 設定使用者每日熱量目標 ----
 function setUserTarget(userId, target) {
   db.prepare('UPDATE users SET cal_target = ? WHERE id = ?').run(target, userId);
@@ -325,6 +337,7 @@ module.exports = {
   insertFood,
   insertBody,
   insertWorkout,
+  upsertAppleEnergy,
   setUserTarget,
   getTodaySummary,
   insertExpense,

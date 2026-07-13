@@ -101,7 +101,11 @@ const RESERVED_EXACT = new Set([
   '取消', '說明', '使用說明', '幫助', '隱私', '隱私權', '隱私說明',
   '刪除我的資料', '刪除資料', '清除我的資料', '確定刪除',
   '今日課表', '記一餐', '記帳', '總覽', '今日總覽', '總結',
+  '連動', 'Apple連動', '運動連動',
 ]);
+
+// Apple 捷徑連動的對外網址（部署在 Render 的固定網址）
+const APPLE_ENDPOINT = 'https://gymeats.onrender.com/apple';
 function isCommandLike(c) {
   if (RESERVED_EXACT.has(c)) return true;
   if (MENU_HINTS[c]) return true; // 量體重／快速補記／記訓練／拍照記…
@@ -176,6 +180,30 @@ async function handleEvent(event) {
   }
   if (content === '隱私' || content === '隱私權' || content === '隱私說明') {
     return [text(PRIVACY_TEXT)];
+  }
+
+  // ---- Apple 運動連動：回傳你的識別碼與捷徑設定資料 ----
+  if (content === '連動' || content === 'Apple連動' || content === '運動連動') {
+    return [
+      text(
+        '🍎 Apple 運動連動設定\n' +
+          '\n' +
+          '用 iPhone「捷徑」App 建立一個捷徑，動作依序：\n' +
+          '1. 取得健康樣本「活動能量」→ 今天\n' +
+          '2. 計算統計值：總和\n' +
+          '3. 取得 URL 內容，設定如下：\n' +
+          '\n' +
+          `網址：${APPLE_ENDPOINT}\n` +
+          '方法：POST\n' +
+          '標頭 Content-Type：application/json\n' +
+          '本文（JSON）三個欄位：\n' +
+          '　token：你在 Render 設的 APPLE_TOKEN 密碼\n' +
+          `　uid：${lineUid}\n` +
+          '　kcal：上一步的總和數字\n' +
+          '\n' +
+          '設好後每天跑一次（可設自動化排程），總覽卡的「運動消耗」就會自動帶入 💪'
+      ),
+    ];
   }
 
   // ---- 刪除我的資料：先確認，避免手誤 ----
