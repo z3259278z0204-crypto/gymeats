@@ -159,7 +159,7 @@ function getLiftMax(userId, name) {
   const row = db
     .prepare(
       `SELECT MAX(weight) AS m FROM workout_logs
-       WHERE user = ? AND name LIKE '%' || ? || '%' AND weight IS NOT NULL`
+       WHERE user = ? AND name = ? AND weight IS NOT NULL`
     )
     .get(userId, name);
   return row && row.m != null ? row.m : null;
@@ -172,7 +172,7 @@ function getLiftProgress(userId, name, limit = 8) {
       `SELECT date(ts / 1000, 'unixepoch', 'localtime') AS day,
               MAX(weight) AS topWeight
        FROM workout_logs
-       WHERE user = ? AND name LIKE '%' || ? || '%' AND weight IS NOT NULL
+       WHERE user = ? AND name = ? AND weight IS NOT NULL
        GROUP BY day
        ORDER BY day DESC
        LIMIT ?`

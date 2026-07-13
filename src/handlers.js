@@ -85,6 +85,23 @@ const MENU_HINTS = {
   熱量估不準: '之後會開放手動修正數字，先幫你記著這個需求 🙏',
 };
 
+// 判斷這句是不是「功能指令／選單按鈕」，而不是使用者要填的內容。
+// 用在點選流程中途（等品項、等動作名）：使用者若改點別的功能，就放棄原流程，
+// 而不是把「總覽」「記帳」這種指令誤存成餐點或動作名。
+const RESERVED_EXACT = new Set([
+  '取消', '說明', '使用說明', '幫助', '隱私', '隱私權', '隱私說明',
+  '刪除我的資料', '刪除資料', '清除我的資料', '確定刪除',
+  '今日課表', '記一餐', '記帳', '總覽', '今日總覽', '總結',
+]);
+function isCommandLike(c) {
+  if (RESERVED_EXACT.has(c)) return true;
+  if (MENU_HINTS[c]) return true; // 量體重／快速補記／記訓練／拍照記…
+  if (/^(記:|課表:|新增動作:|餐別:|分類:)/.test(c)) return true;
+  if (c.includes(':') || c.includes('：')) return true;
+  if (/花費$/.test(c)) return true; // 今日／本週／本月花費
+  return false;
+}
+
 // 純文字回覆的小工具
 function text(t, quickReply) {
   const msg = { type: 'text', text: t };
@@ -127,6 +144,13 @@ async function handleEvent(event) {
     pendingCustom.delete(lineUid);
     pendingDelete.delete(lineUid);
     return [text('好的，取消了 👌')];
+  }
+
+  // 只要是功能指令／選單按鈕，就放棄「等品項／等動作名」這類自由輸入流程，
+  // 避免使用者中途改點別的功能時，把「總覽」「記帳」誤存成餐點或自訂動作。
+  if (isCommandLike(content)) {
+    pendingMeal.delete(lineUid);
+    pendingCustom.delete(lineUid);
   }
 
   // ---- 使用說明 / 隱私 ----
@@ -222,11 +246,8 @@ async function handleEvent(event) {
   // 正在等使用者輸入要新增的動作名稱
   if (pendingCustom.has(lineUid)) {
     const group = pendingCustom.get(lineUid);
-    // 看起來像別的指令（點了其他按鈕）→ 放棄新增，往下照常處理
-    const looksLikeCommand =
-      content.includes(':') || content.includes('：') || content === '今日課表' ||
-      content.startsWith('課表') || content.startsWith('新增動作') || content.startsWith('看 ');
-    if (!looksLikeCommand && content.length <= 20) {
+    // 改點別的功能指令 → 放棄新增；名稱過長也不收
+    if (!isCommandLike(content) && content.length <= 20) {
       pendingCustom.delete(lineUid);
       const added = addCustomExercise({ userId: user.id, group, name: content });
       const msg = added
