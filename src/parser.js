@@ -75,9 +75,20 @@ function isLoneNumber(text) {
 function parseMessage(raw) {
   const text = normalize(raw);
 
-  // 1) 總覽指令
+  // 1) 總覽指令（可指定哪一天）
+  //    今天：總覽 / 今天　｜　相對：昨天總覽 / 前天總覽
+  //    指定日：總覽 7/13、總覽 2026-07-13、7/13總覽
   if (OVERVIEW_WORDS.includes(text)) {
-    return { type: 'overview' };
+    return { type: 'overview', dayOffset: 0 };
+  }
+  if (/^(昨天|昨日)(的?總覽)?$/.test(text)) return { type: 'overview', dayOffset: -1 };
+  if (/^(前天)(的?總覽)?$/.test(text)) return { type: 'overview', dayOffset: -2 };
+  {
+    const dateStr = '(\\d{4}-\\d{1,2}-\\d{1,2}|\\d{1,2}[\\/月]\\d{1,2}日?)';
+    const m =
+      text.match(new RegExp(`^(?:總覽|今日總覽|總結)\\s*${dateStr}$`)) ||
+      text.match(new RegExp(`^${dateStr}\\s*(?:的?總覽)$`));
+    if (m) return { type: 'overview', dateStr: m[1] };
   }
 
   // 1.5) 設定每日目標：例「目標 2600」

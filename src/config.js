@@ -17,6 +17,8 @@ const config = {
   },
   // 每日熱量目標預設值（環境變數 CAL_TARGET）。使用者若用「目標 XXXX」設定會覆蓋這個
   calTargetDefault: Number(process.env.CAL_TARGET) || null,
+  // 每日喝水目標（環境變數 WATER_TARGET，毫升）。沒設就依最新體重×30ml 自動算，再沒有就 2000
+  waterTargetDefault: Number(process.env.WATER_TARGET) || null,
 };
 
 // 啟動時檢查必填金鑰有沒有漏，漏了就提前提醒，不要跑到一半才壞

@@ -32,9 +32,11 @@ function row(label, value, highlight = false) {
   };
 }
 
-// 今日總覽卡片。summary 來自 db.getTodaySummary()，calTarget 可為 null
-function buildOverviewFlex(summary, calTarget) {
-  const { food, body, workout } = summary;
+// 總覽卡片。summary 來自 db.getSummary()。
+// opts：{ calTarget, waterGoal, title, dateLabel } — 標題與日期讓「查別天」也能共用這張卡。
+function buildOverviewFlex(summary, opts = {}) {
+  const { calTarget, waterGoal, title = '今日總覽', dateLabel } = opts;
+  const { food, body, workout, water } = summary;
   const burn = workout ? workout.kcal : 0;
   const net = food.kcal - burn; // 淨熱量 = 吃進去 - 運動燒掉
 
@@ -46,24 +48,28 @@ function buildOverviewFlex(summary, calTarget) {
     netText = `${fmt(net)}/${fmt(calTarget)}${netOver ? ' ⚠️' : ''}`;
   }
 
+  // 喝水：有目標就顯示「實際/目標」，達標補 ✅
+  const drank = water ? water.ml : 0;
+  let waterText = `${fmt(drank)} ml`;
+  if (waterGoal) {
+    waterText = `${fmt(drank)}/${fmt(waterGoal)} ml${drank >= waterGoal ? ' ✅' : ''}`;
+  }
+
   const workoutCount = workout ? workout.count : 0;
+  const subtitle =
+    (dateLabel ? `${dateLabel} · ` : '') + `已記 ${food.meals} 餐 · ${workoutCount} 次訓練`;
 
   return {
     type: 'flex',
-    altText: '今日總覽',
+    altText: title,
     contents: {
       type: 'bubble',
       header: {
         type: 'box',
         layout: 'vertical',
         contents: [
-          { type: 'text', text: '今日總覽', weight: 'bold', size: 'lg', color: '#FFFFFF' },
-          {
-            type: 'text',
-            text: `已記 ${food.meals} 餐 · ${workoutCount} 次訓練`,
-            size: 'xs',
-            color: '#FFFFFFCC',
-          },
+          { type: 'text', text: title, weight: 'bold', size: 'lg', color: '#FFFFFF' },
+          { type: 'text', text: subtitle, size: 'xs', color: '#FFFFFFCC', wrap: true },
         ],
         backgroundColor: '#1F7A5A',
         paddingAll: '16px',
@@ -82,6 +88,7 @@ function buildOverviewFlex(summary, calTarget) {
           row('碳水', `${fmt(food.carb)} g`),
           row('脂肪', `${fmt(food.fat)} g`),
           { type: 'separator', margin: 'md' },
+          row('喝水', waterText),
           row('花費', `$${fmt(food.price)}`),
           row('體重', body ? `${fmt(body.weight, 1)} kg` : '尚未記錄'),
         ],
@@ -368,6 +375,37 @@ const spendingQuickReply = {
   ],
 };
 
+// 喝水快捷鈕：點「喝水」後跳出，點一下就記一杯的量（送出「喝水 500」讓 parser 記帳）
+const WATER_BUTTONS = [
+  ['🥛', 200], ['🥤', 350], ['🍶', 500], ['🍾', 700],
+];
+const waterPickerQuickReply = {
+  items: [
+    ...WATER_BUTTONS.map(([icon, ml]) => ({
+      type: 'action',
+      action: { type: 'message', label: `${icon} ${ml}`, text: `喝水 ${ml}` },
+    })),
+    { type: 'action', action: { type: 'message', label: '📊 總覽', text: '總覽' } },
+    CANCEL_ITEM,
+  ],
+};
+
+// 提醒設定快捷鈕：點「提醒」後跳出，選常用時段（送「設定提醒 HH:MM」）或關閉
+const REMINDER_PRESETS = [
+  ['🍜 午餐後', '13:00'], ['🌆 晚餐後', '20:00'], ['🌙 睡前', '22:00'],
+];
+const reminderQuickReply = {
+  items: [
+    ...REMINDER_PRESETS.map(([label, hm]) => ({
+      type: 'action',
+      action: { type: 'message', label, text: `設定提醒 ${hm}` },
+    })),
+    { type: 'action', action: { type: 'message', label: '📋 我的提醒', text: '我的提醒' } },
+    { type: 'action', action: { type: 'message', label: '🔕 全部關閉', text: '關閉提醒' } },
+    CANCEL_ITEM,
+  ],
+};
+
 module.exports = {
   buildOverviewFlex,
   buildSpendingFlex,
@@ -380,6 +418,8 @@ module.exports = {
   mealPickerQuickReply,
   spendingQuickReply,
   workoutPickerQuickReply,
+  waterPickerQuickReply,
+  reminderQuickReply,
   cancelQuickReply,
   fmt,
 };

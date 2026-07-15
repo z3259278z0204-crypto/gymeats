@@ -1,9 +1,14 @@
+// 時區：固定用台灣時間，讓「今天」的界線、定時提醒都以台灣時間為準。
+// 必須在所有 Date 運算之前設定（放在最上面）。可用環境變數 TZ 覆蓋。
+process.env.TZ = process.env.TZ || 'Asia/Taipei';
+
 // 主程式：開伺服器、驗證 LINE 簽章、把訊息交給決策中心
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { config, assertConfig } = require('./config');
 const { handleEvent } = require('./handlers');
 const { getOrCreateUser, upsertAppleEnergy } = require('./db');
+const { startReminderScheduler } = require('./reminders');
 
 assertConfig(); // 啟動時提醒金鑰有沒有漏填
 
@@ -62,4 +67,5 @@ app.post('/apple', express.json(), (req, res) => {
 app.listen(config.port, () => {
   console.log(`🚀 GymEats 已啟動，正在監聽 http://localhost:${config.port}`);
   console.log('   下一步：用 ngrok 對外，並把網址填到 LINE 後台的 Webhook URL');
+  startReminderScheduler(client); // 開始跑定時提醒
 });

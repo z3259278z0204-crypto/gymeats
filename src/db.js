@@ -75,7 +75,30 @@ db.exec(`
     UNIQUE(user, grp, name),
     FOREIGN KEY (user) REFERENCES users(id)
   );
+
+  -- 喝水記錄：一次一筆毫升數，總覽會加總當天的量
+  CREATE TABLE IF NOT EXISTS water_logs (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    user  INTEGER NOT NULL,
+    ts    INTEGER NOT NULL,
+    ml    INTEGER NOT NULL,               -- 這次喝的毫升數
+    FOREIGN KEY (user) REFERENCES users(id)
+  );
+
+  -- 定時提醒：每天固定時間推播提醒記帳/記餐。可設多個時段、可關閉。
+  CREATE TABLE IF NOT EXISTS reminders (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    user    INTEGER NOT NULL,
+    hour    INTEGER NOT NULL,             -- 24 小時制的時
+    minute  INTEGER NOT NULL,             -- 分
+    label   TEXT,                         -- 顯示用小標，可空
+    enabled INTEGER DEFAULT 1,            -- 1=開, 0=關
+    UNIQUE(user, hour, minute),
+    FOREIGN KEY (user) REFERENCES users(id)
+  );
 `);
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 舊資料庫若沒有 kcal 欄位，補上（新資料庫已含，這裡會被 catch 忽略）
 try {
@@ -237,7 +260,10 @@ function removeCustomExercise({ userId, group, name }) {
 // 連帳號本身(users，含 LINE 識別碼與目標設定)一起刪，真正清空、識別碼不殘留。
 // 下次傳訊 getOrCreateUser 會重建成全新帳號。
 function deleteAllUserData(userId) {
-  const tables = ['food_logs', 'body_logs', 'workout_logs', 'expenses', 'custom_exercises'];
+  const tables = [
+    'food_logs', 'body_logs', 'workout_logs', 'expenses',
+    'custom_exercises', 'water_logs', 'reminders',
+  ];
   const tx = db.transaction((uid) => {
     let n = 0;
     for (const t of tables) {
@@ -298,9 +324,9 @@ function getSpending(userId, startMs) {
   return { total, cats };
 }
 
-// ---- 今日總覽：把今天的餐加總，抓最新一筆體重 ----
-function getTodaySummary(userId) {
-  const start = todayStartMs();
+// ---- 某一天的總覽：把該天的餐加總、喝水加總，抓當天(含以前)最新一筆體重 ----
+// startMs=當天00:00，endMs=隔天00:00。查今天就用 getTodaySummary。
+function getSummary(userId, startMs, endMs) {
   const food = db
     .prepare(
       `SELECT
@@ -310,25 +336,82 @@ function getTodaySummary(userId) {
          COALESCE(SUM(fat), 0)     AS fat,
          COALESCE(SUM(price), 0)   AS price,
          COUNT(*)                  AS meals
-       FROM food_logs WHERE user = ? AND ts >= ?`
+       FROM food_logs WHERE user = ? AND ts >= ? AND ts < ?`
     )
-    .get(userId, start);
+    .get(userId, startMs, endMs);
 
+  // 體重抓「那天結束前」最新一筆（過去某天沒量，就沿用當時最近的一次）
   const body = db
     .prepare(
       `SELECT weight, bodyfat FROM body_logs
-       WHERE user = ? ORDER BY ts DESC LIMIT 1`
+       WHERE user = ? AND ts < ? ORDER BY ts DESC LIMIT 1`
     )
-    .get(userId);
+    .get(userId, endMs);
 
   const workout = db
     .prepare(
       `SELECT COALESCE(SUM(kcal), 0) AS kcal, COUNT(*) AS count
-       FROM workout_logs WHERE user = ? AND ts >= ?`
+       FROM workout_logs WHERE user = ? AND ts >= ? AND ts < ?`
     )
-    .get(userId, start);
+    .get(userId, startMs, endMs);
 
-  return { food, body: body || null, workout };
+  const water = db
+    .prepare(
+      `SELECT COALESCE(SUM(ml), 0) AS ml
+       FROM water_logs WHERE user = ? AND ts >= ? AND ts < ?`
+    )
+    .get(userId, startMs, endMs);
+
+  return { food, body: body || null, workout, water };
+}
+
+// ---- 今日總覽（getSummary 的今天版）----
+function getTodaySummary(userId) {
+  const start = todayStartMs();
+  return getSummary(userId, start, start + DAY_MS);
+}
+
+// ---- 喝水：寫入一筆 ----
+function insertWater({ userId, ml }) {
+  return db
+    .prepare('INSERT INTO water_logs (user, ts, ml) VALUES (?, ?, ?)')
+    .run(userId, Date.now(), ml);
+}
+
+// ---- 提醒：新增/更新一個時段（同時段已存在就重新開啟並更新小標）----
+function setReminder({ userId, hour, minute, label }) {
+  db.prepare(
+    `INSERT INTO reminders (user, hour, minute, label, enabled)
+     VALUES (?, ?, ?, ?, 1)
+     ON CONFLICT(user, hour, minute)
+     DO UPDATE SET enabled = 1, label = excluded.label`
+  ).run(userId, hour, minute, label || null);
+}
+
+// ---- 提醒：拿某人目前開啟中的所有時段 ----
+function getReminders(userId) {
+  return db
+    .prepare(
+      `SELECT hour, minute, label FROM reminders
+       WHERE user = ? AND enabled = 1 ORDER BY hour, minute`
+    )
+    .all(userId);
+}
+
+// ---- 提醒：關閉某人全部提醒 ----
+function disableAllReminders(userId) {
+  return db.prepare('UPDATE reminders SET enabled = 0 WHERE user = ?').run(userId).changes;
+}
+
+// ---- 提醒：某個時、分「該不該發」→ 回傳所有到點的人（含 LINE 識別碼與小標）----
+function getDueReminders(hour, minute) {
+  return db
+    .prepare(
+      `SELECT u.line_uid AS lineUid, r.label AS label
+       FROM reminders r JOIN users u ON u.id = r.user
+       WHERE r.enabled = 1 AND r.hour = ? AND r.minute = ?`
+    )
+    .all(hour, minute);
 }
 
 module.exports = {
@@ -340,6 +423,12 @@ module.exports = {
   upsertAppleEnergy,
   setUserTarget,
   getTodaySummary,
+  getSummary,
+  insertWater,
+  setReminder,
+  getReminders,
+  disableAllReminders,
+  getDueReminders,
   insertExpense,
   getSpending,
   insertLift,

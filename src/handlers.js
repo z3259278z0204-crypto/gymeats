@@ -6,6 +6,11 @@ const {
   insertWorkout,
   setUserTarget,
   getTodaySummary,
+  getSummary,
+  insertWater,
+  setReminder,
+  getReminders,
+  disableAllReminders,
   insertExpense,
   getSpending,
   insertLift,
@@ -30,6 +35,8 @@ const {
   mealPickerQuickReply,
   spendingQuickReply,
   workoutPickerQuickReply,
+  waterPickerQuickReply,
+  reminderQuickReply,
   cancelQuickReply,
   fmt,
   buildStretchFlex,
@@ -76,10 +83,12 @@ const HELP_TEXT =
   '・量體重：直接打數字，例「72.3」或「72.3 15」(體重 體脂)\n' +
   '・記帳：打「房租 15000」「交通 捷運 50」\n' +
   '・查花費：打「今日/本週/本月花費」\n' +
+  '・喝水：打「喝水」選杯數，或「喝水 500」\n' +
+  '・定時提醒：打「提醒」設定每天提醒記帳的時間\n' +
   '・今日課表：排當天要練的動作，可加自訂動作\n' +
   '・記重訓：打「臥推 60 8」(動作 重量 次數)\n' +
   '・查進步：打「看 臥推」\n' +
-  '・總覽：打「總覽」看今天吃了多少\n' +
+  '・總覽：打「總覽」；看別天打「昨天總覽」或「總覽 7/13」\n' +
   '\n' +
   '🔒 隱私：打「隱私」\n' +
   '🗑️ 清除資料：打「刪除我的資料」';
@@ -102,6 +111,10 @@ const RESERVED_EXACT = new Set([
   '刪除我的資料', '刪除資料', '清除我的資料', '確定刪除',
   '今日課表', '記一餐', '記帳', '總覽', '今日總覽', '總結',
   '連動', 'Apple連動', '運動連動',
+  '喝水', '水', '飲水', '喝水記錄',
+  '提醒', '提醒設定', '記帳提醒', '定時提醒',
+  '我的提醒', '查看提醒', '關閉提醒', '取消提醒', '關掉提醒', '關閉全部提醒',
+  '昨天', '前天', '昨天總覽', '前天總覽',
 ]);
 
 // Apple 捷徑連動的對外網址（部署在 Render 的固定網址）
@@ -112,6 +125,10 @@ function isCommandLike(c) {
   if (/^(記:|課表:|新增動作:|餐別:|分類:)/.test(c)) return true;
   if (c.includes(':') || c.includes('：')) return true;
   if (/花費$/.test(c)) return true; // 今日／本週／本月花費
+  if (/^(喝水|飲水|水)\s*\d/.test(c)) return true; // 喝水 500
+  if (/^(設定提醒|提醒)\s*\d/.test(c)) return true; // 提醒 21:30
+  if (/^(總覽|今日總覽|總結)\s*\d/.test(c)) return true; // 總覽 7/13
+  if (/總覽$/.test(c)) return true; // 7/13總覽、昨天總覽
   return false;
 }
 
@@ -141,6 +158,114 @@ function buildTodayWorkout(lineUid, userId, key) {
   const card = buildWorkoutFlex(key, all);
   card.quickReply = buildLiftPicker(key, all);
   return card;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_CN = '日一二三四五六';
+
+// 一律清掉所有進行中的點選流程（切換到喝水/提醒等指令時用）
+function clearPending(uid) {
+  pendingExpense.delete(uid);
+  pendingMeal.delete(uid);
+  pendingLift.delete(uid);
+  pendingWorkout.delete(uid);
+  pendingCustom.delete(uid);
+  pendingDelete.delete(uid);
+}
+
+// 兩位數補零
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// 某 Date 的當天 00:00
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+// 'YYYY-MM-DD'（給換日按鈕帶回來查）
+function ymd(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+// '7/15（二）'
+function dayLabel(d) {
+  return `${d.getMonth() + 1}/${d.getDate()}（${WEEK_CN[d.getDay()]}）`;
+}
+// 把「7/13」「2026-07-13」「7月13日」轉成當天 00:00 的 Date；認不出回 null
+function parseDateStr(str) {
+  let y;
+  let m;
+  let dd;
+  const iso = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    y = Number(iso[1]);
+    m = Number(iso[2]);
+    dd = Number(iso[3]);
+  } else {
+    const md = str.match(/^(\d{1,2})[/月](\d{1,2})日?$/);
+    if (!md) return null;
+    y = new Date().getFullYear();
+    m = Number(md[1]);
+    dd = Number(md[2]);
+  }
+  const d = new Date(y, m - 1, dd);
+  if (d.getMonth() !== m - 1 || d.getDate() !== dd) return null; // 無效日期
+  return startOfDay(d);
+}
+
+// 把總覽意圖（dayOffset 或 dateStr）換成查詢區間與顯示資訊；認不出回 null
+function resolveDay(intent) {
+  const todayStart = startOfDay(new Date());
+  let dayStart;
+  if (intent.dateStr) {
+    dayStart = parseDateStr(intent.dateStr);
+    if (!dayStart) return null;
+  } else {
+    dayStart = new Date(todayStart);
+    dayStart.setDate(dayStart.getDate() + (intent.dayOffset || 0));
+  }
+  // 不查未來，超過今天就當今天
+  if (dayStart.getTime() > todayStart.getTime()) dayStart = new Date(todayStart);
+
+  const start = dayStart.getTime();
+  const isToday = start === todayStart.getTime();
+  const prev = new Date(dayStart);
+  prev.setDate(prev.getDate() - 1);
+  const next = new Date(dayStart);
+  next.setDate(next.getDate() + 1);
+  return {
+    start,
+    end: start + DAY_MS,
+    isToday,
+    label: dayLabel(dayStart),
+    prevStr: ymd(prev),
+    nextStr: ymd(next),
+    canNext: next.getTime() <= todayStart.getTime(),
+  };
+}
+
+// 換日 + 喝水的快捷鈕（附在總覽卡下面）
+function overviewNav(d) {
+  const items = [
+    { type: 'action', action: { type: 'message', label: '◀ 前一天', text: `總覽 ${d.prevStr}` } },
+  ];
+  if (!d.isToday) {
+    if (d.canNext) {
+      items.push({ type: 'action', action: { type: 'message', label: '後一天 ▶', text: `總覽 ${d.nextStr}` } });
+    }
+    items.push({ type: 'action', action: { type: 'message', label: '📅 今天', text: '總覽' } });
+  }
+  items.push({ type: 'action', action: { type: 'message', label: '💧 喝水', text: '喝水' } });
+  return { items };
+}
+
+// 依「最新體重×30ml、取整百」算每日喝水目標；環境變數 WATER_TARGET 可覆蓋；再沒有就 2000
+function waterGoalFor(summary) {
+  if (config.waterTargetDefault) return config.waterTargetDefault;
+  const w = summary && summary.body ? summary.body.weight : null;
+  if (w && w > 0) return Math.round((w * 30) / 100) * 100;
+  return 2000;
 }
 
 // 處理一個 LINE event，回傳「要回覆的訊息陣列」（或 null 表示不回）
@@ -180,6 +305,79 @@ async function handleEvent(event) {
   }
   if (content === '隱私' || content === '隱私權' || content === '隱私說明') {
     return [text(PRIVACY_TEXT)];
+  }
+
+  // ---- 喝水：「喝水」開選單，「喝水 500」直接記一筆 ----
+  // 早一步攔截，避免「喝水 500」被下面的記帳/記餐流程當成金額。
+  const waterCmd = content.match(/^(?:喝水|飲水|水|喝水記錄)\s*(\d{0,5})\s*(?:ml|cc|c\.c\.|毫升)?$/i);
+  if (waterCmd) {
+    clearPending(lineUid);
+    const ml = waterCmd[1] ? Number(waterCmd[1]) : 0;
+    if (!ml) {
+      return [text('喝了多少水？點下面選，或直接打「喝水 500」💧', waterPickerQuickReply)];
+    }
+    if (ml > 5000) {
+      return [text('這個數字有點大耶😅\n一次大概 200～1000 ml，再試一次', waterPickerQuickReply)];
+    }
+    insertWater({ userId: user.id, ml });
+    const sum = getTodaySummary(user.id);
+    const goal = waterGoalFor(sum);
+    const total = sum.water.ml;
+    const goalPart = goal ? `/${fmt(goal)}` : '';
+    const hit = goal && total >= goal ? '　達標 ✅' : '';
+    return [text(`💧 +${ml} ml，今天累計 ${fmt(total)}${goalPart} ml${hit}`, waterPickerQuickReply)];
+  }
+
+  // ---- 定時提醒：設定/查看/關閉每天固定時間提醒記帳 ----
+  if (content === '提醒' || content === '提醒設定' || content === '記帳提醒' || content === '定時提醒') {
+    clearPending(lineUid);
+    const list = getReminders(user.id);
+    const cur = list.length
+      ? '目前提醒：\n' + list.map((r) => `・${pad2(r.hour)}:${pad2(r.minute)}`).join('\n') + '\n\n'
+      : '目前還沒設提醒。\n\n';
+    return [
+      text(
+        cur + '要幾點提醒你記帳？點下面常用時段，或打「提醒 21:30」自訂 ⏰\n（可設多個時段）',
+        reminderQuickReply
+      ),
+    ];
+  }
+  if (content === '我的提醒' || content === '查看提醒') {
+    const list = getReminders(user.id);
+    if (!list.length) return [text('目前沒有任何提醒。打「提醒」可設定 ⏰', reminderQuickReply)];
+    return [
+      text(
+        '📋 你的提醒時段：\n' +
+          list.map((r) => `・${pad2(r.hour)}:${pad2(r.minute)}`).join('\n') +
+          '\n\n新增打「提醒 HH:MM」，全部關閉打「關閉提醒」',
+        reminderQuickReply
+      ),
+    ];
+  }
+  if (
+    content === '關閉提醒' || content === '取消提醒' ||
+    content === '關掉提醒' || content === '關閉全部提醒'
+  ) {
+    const n = disableAllReminders(user.id);
+    return [text(n > 0 ? `🔕 已關閉全部提醒（${n} 個時段）` : '目前沒有開啟中的提醒')];
+  }
+  {
+    const rm = content.match(/^(?:設定提醒|提醒)\s*(\d{1,2})[:：](\d{2})$/);
+    if (rm) {
+      clearPending(lineUid);
+      const h = Number(rm[1]);
+      const mi = Number(rm[2]);
+      if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) {
+        setReminder({ userId: user.id, hour: h, minute: mi, label: null });
+        return [
+          text(
+            `✅ 已設定每天 ${pad2(h)}:${pad2(mi)} 提醒你記帳 ⏰\n可再設其他時段，或打「我的提醒」查看、「關閉提醒」取消`,
+            reminderQuickReply
+          ),
+        ];
+      }
+      return [text('時間看起來怪怪的，試試「提醒 21:30」（24 小時制，00～23 時）')];
+    }
   }
 
   // ---- Apple 運動連動：回傳你的識別碼與捷徑設定資料 ----
@@ -383,11 +581,23 @@ async function handleEvent(event) {
 
   const intent = parseMessage(content);
 
-  // ---- 今日總覽 ----
+  // ---- 總覽（今天／昨天／指定日）----
   if (intent.type === 'overview') {
-    const summary = getTodaySummary(user.id);
-    const target = user.cal_target ?? config.calTargetDefault;
-    return [buildOverviewFlex(summary, target)];
+    const d = resolveDay(intent);
+    if (!d) {
+      return [text('看不懂是哪一天 🤔\n試試「總覽」「昨天總覽」或「總覽 7/13」')];
+    }
+    const summary = getSummary(user.id, d.start, d.end);
+    const calTarget = user.cal_target ?? config.calTargetDefault;
+    const waterGoal = waterGoalFor(summary);
+    const card = buildOverviewFlex(summary, {
+      calTarget,
+      waterGoal,
+      title: d.isToday ? '今日總覽' : '當日總覽',
+      dateLabel: d.label,
+    });
+    card.quickReply = overviewNav(d);
+    return [card];
   }
 
   // ---- 設定每日目標 ----
