@@ -102,6 +102,35 @@ const HELP_TEXT =
   '🔒 隱私：打「隱私」\n' +
   '🗑️ 清除資料：打「刪除我的資料」';
 
+// 加入好友時送的兩則歡迎（第 1 則歡迎＋問設定資料，第 2 則說明）
+const WELCOME_1 =
+  '🎉 歡迎加入 練食記 GymEats！\n' +
+  '\n' +
+  '我幫你「一餐同時記熱量和花費」，還能排課表、追蹤喝水和開銷 💪\n' +
+  '\n' +
+  '建議先花 1 分鐘設定你的專屬資料 📋\n' +
+  '打「設定資料」→ 算出你的每日建議熱量、蛋白質，課表也會依你的目標（增肌／減脂／維持）自動調整。\n' +
+  '\n' +
+  '也可以晚點再設，先看下面怎麼用 👇';
+
+const WELCOME_2 =
+  '📖 練食記 這樣用：\n' +
+  '\n' +
+  '🍱 記一餐：打「午餐 雞胸便當 120」（金額可省略，自動估熱量）\n' +
+  '💰 記帳：打「交通 捷運 50」\n' +
+  '💧 喝水：打「喝水」選杯數\n' +
+  '⚖️ 量體重：直接打數字，例「72.3」\n' +
+  '💪 今日課表：打「今日課表」選部位\n' +
+  '📊 看今天：打「總覽」\n' +
+  '⏰ 提醒記帳：打「提醒」設定時間\n' +
+  '\n' +
+  '🔒 隱私：打「隱私」　🗑️ 清資料：打「刪除我的資料」';
+
+// 第 2 則說明下方帶的按鈕（LINE 只在最後一則顯示 quickReply）
+const welcomeQuickReply = {
+  items: [{ type: 'action', action: { type: 'message', label: '📋 設定資料', text: '設定資料' } }],
+};
+
 // 圖文選單按鈕送出的關鍵字 → 對應的引導或佔位回覆
 const MENU_HINTS = {
   量體重: '量體重直接打數字就好\n例：72.3（也可加體脂：72.3 15）',
@@ -399,6 +428,12 @@ function waterGoalFor(summary) {
 
 // 處理一個 LINE event，回傳「要回覆的訊息陣列」（或 null 表示不回）
 async function handleEvent(event) {
+  // 加入好友／解除封鎖：送兩則歡迎（歡迎＋問設定資料，接著說明）
+  if (event.type === 'follow') {
+    getOrCreateUser(event.source.userId); // 先建帳號
+    return [text(WELCOME_1), text(WELCOME_2, welcomeQuickReply)];
+  }
+
   // 只處理文字訊息；其他型別（貼圖、圖片等）先給簡單引導
   if (event.type !== 'message') return null;
   const lineUid = event.source.userId;
