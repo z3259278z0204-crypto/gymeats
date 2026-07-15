@@ -107,6 +107,23 @@ try {
   /* 欄位已存在，略過 */
 }
 
+// users 表補上個人化資料欄位（第一次跑會逐一加上，已存在的會被 catch 略過）
+for (const col of [
+  'sex TEXT', // 性別：男/女
+  'age INTEGER', // 年齡
+  'height REAL', // 身高(cm)
+  'pweight REAL', // 設定資料時填的體重(kg)，給熱量計算用
+  'bodyfat REAL', // 體脂率(%)，可空
+  'activity TEXT', // 活動量：久坐/輕度/中度/高度
+  'protein_target INTEGER', // 每日蛋白質建議(克)
+]) {
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN ${col}`);
+  } catch (e) {
+    /* 欄位已存在，略過 */
+  }
+}
+
 // ---- 使用者：用 LINE 的 userId 找人，沒有就建一個，回傳我們自己的 id ----
 function getOrCreateUser(lineUid) {
   let row = db.prepare('SELECT * FROM users WHERE line_uid = ?').get(lineUid);
@@ -177,6 +194,28 @@ function upsertAppleEnergy({ userId, kcal }) {
 // ---- 設定使用者每日熱量目標 ----
 function setUserTarget(userId, target) {
   db.prepare('UPDATE users SET cal_target = ? WHERE id = ?').run(target, userId);
+}
+
+// ---- 儲存個人化資料＋算好的目標（設定資料問卷完成時呼叫）----
+function saveProfile(userId, p) {
+  db.prepare(
+    `UPDATE users SET
+       sex = @sex, age = @age, height = @height, pweight = @pweight,
+       bodyfat = @bodyfat, activity = @activity, goal_mode = @goal,
+       cal_target = @calTarget, protein_target = @protein
+     WHERE id = @id`
+  ).run({
+    id: userId,
+    sex: p.sex,
+    age: p.age,
+    height: p.height,
+    pweight: p.weight,
+    bodyfat: p.bodyfat ?? null,
+    activity: p.activity,
+    goal: p.goal,
+    calTarget: p.calTarget,
+    protein: p.protein,
+  });
 }
 
 // ---- 重訓紀錄：寫入一組（動作＋重量＋次數）----
@@ -422,6 +461,7 @@ module.exports = {
   insertWorkout,
   upsertAppleEnergy,
   setUserTarget,
+  saveProfile,
   getTodaySummary,
   getSummary,
   insertWater,

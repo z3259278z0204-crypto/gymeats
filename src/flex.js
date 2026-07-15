@@ -1,6 +1,13 @@
 // 組「今日總覽」的 Flex 卡片，以及記完餐的 Quick Reply 按鈕
 // 原則：超標只中性顯示數字（例 1,750/1,600 ⚠️），不出現任何勸戒或責備文字
-const { WORKOUTS, WORKOUT_KEYS } = require('./workouts');
+const {
+  WORKOUTS,
+  WORKOUT_KEYS,
+  compoundNames,
+  warmupFor,
+  schemeFor,
+  GOAL_SCHEME,
+} = require('./workouts');
 const STRETCH_KEY = '伸展放鬆';
 
 // 數字加千分位，null 顯示為「—」
@@ -35,7 +42,7 @@ function row(label, value, highlight = false) {
 // 總覽卡片。summary 來自 db.getSummary()。
 // opts：{ calTarget, waterGoal, title, dateLabel } — 標題與日期讓「查別天」也能共用這張卡。
 function buildOverviewFlex(summary, opts = {}) {
-  const { calTarget, waterGoal, title = '今日總覽', dateLabel } = opts;
+  const { calTarget, waterGoal, proteinTarget, title = '今日總覽', dateLabel } = opts;
   const { food, body, workout, water } = summary;
   const burn = workout ? workout.kcal : 0;
   const net = food.kcal - burn; // 淨熱量 = 吃進去 - 運動燒掉
@@ -84,7 +91,7 @@ function buildOverviewFlex(summary, opts = {}) {
           row('運動消耗', burn > 0 ? `-${fmt(burn)} 大卡` : '—'),
           row('淨熱量', netText, netOver),
           { type: 'separator', margin: 'md' },
-          row('蛋白質', `${fmt(food.protein)} g`),
+          row('蛋白質', proteinTarget ? `${fmt(food.protein)}/${fmt(proteinTarget)} g` : `${fmt(food.protein)} g`),
           row('碳水', `${fmt(food.carb)} g`),
           row('脂肪', `${fmt(food.fat)} g`),
           { type: 'separator', margin: 'md' },
@@ -169,28 +176,54 @@ const mealQuickReply = {
   ],
 };
 
-// 今日課表卡：列出選定部位的動作與組×次
-function buildWorkoutFlex(key, items) {
+// 小標題列（灰色小字），課表分段用
+function sectionLabel(t) {
+  return { type: 'text', text: t, size: 'xs', color: '#1F7A5A', weight: 'bold', margin: 'sm' };
+}
+// 熱身/一般文字列（左對齊、可換行）
+function lineText(t, color = '#555555') {
+  return { type: 'text', text: `· ${t}`, size: 'sm', color, wrap: true };
+}
+
+// 今日課表卡。opts：{ goal }（有目標就依目標顯示組×次與有氧建議）
+function buildWorkoutFlex(key, items, opts = {}) {
   const w = WORKOUTS[key];
   if (!w) return null;
   const list = items || w.items;
+  const goal = opts.goal || null;
+  const scheme = goal ? GOAL_SCHEME[goal] : null;
+  const compounds = compoundNames(key);
 
-  const rows = list.map((it) => ({
-    type: 'box',
-    layout: 'horizontal',
-    contents: [
-      { type: 'text', text: it.name, size: 'sm', color: '#333333', flex: 5, wrap: true },
-      {
-        type: 'text',
-        text: it.sr,
-        size: 'sm',
-        color: '#1F7A5A',
-        align: 'end',
-        flex: 3,
-        weight: 'bold',
-      },
-    ],
-  }));
+  // 熱身列
+  const warmRows = warmupFor(key).map((t) => lineText(t, '#8A6D3B'));
+
+  // 主課列：有目標就用目標的組×次，否則沿用動作預設 sr
+  const workRows = list.map((it) => {
+    const sr = scheme ? schemeFor(goal, compounds.has(it.name)) || it.sr : it.sr;
+    return {
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        { type: 'text', text: it.name, size: 'sm', color: '#333333', flex: 5, wrap: true },
+        { type: 'text', text: sr, size: 'sm', color: '#1F7A5A', align: 'end', flex: 3, weight: 'bold' },
+      ],
+    };
+  });
+
+  const body = [
+    sectionLabel('🔥 熱身（先做，暖開再上重量）'),
+    ...warmRows,
+    { type: 'separator', margin: 'md' },
+    sectionLabel('💪 主課'),
+    ...workRows,
+  ];
+  if (scheme) {
+    body.push({ type: 'separator', margin: 'md' });
+    body.push(lineText(`休息：${scheme.rest}`, '#8C8C8C'));
+    body.push(lineText(`有氧：${scheme.cardio}`, '#8C8C8C'));
+  }
+
+  const subtitle = goal ? `目標：${goal}　·　漸進超負荷` : '增肌微減脂';
 
   return {
     type: 'flex',
@@ -201,7 +234,7 @@ function buildWorkoutFlex(key, items) {
         type: 'box',
         layout: 'vertical',
         contents: [
-          { type: 'text', text: '今日課表', size: 'xs', color: '#FFFFFFCC' },
+          { type: 'text', text: `今日課表 · ${subtitle}`, size: 'xs', color: '#FFFFFFCC', wrap: true },
           { type: 'text', text: w.title, weight: 'bold', size: 'lg', color: '#FFFFFF', wrap: true },
         ],
         backgroundColor: '#1F7A5A',
@@ -210,9 +243,9 @@ function buildWorkoutFlex(key, items) {
       body: {
         type: 'box',
         layout: 'vertical',
-        spacing: 'md',
+        spacing: 'sm',
         paddingAll: '16px',
-        contents: rows,
+        contents: body,
       },
       footer: {
         type: 'box',
@@ -220,7 +253,7 @@ function buildWorkoutFlex(key, items) {
         contents: [
           {
             type: 'text',
-            text: '👇 點下面動作記錄重量　·　查進步：看 臥推',
+            text: '👇 點動作記錄重量　·　練完點「🧘 收操」放鬆',
             size: 'xxs',
             color: '#8C8C8C',
             wrap: true,
@@ -238,8 +271,8 @@ function buildLiftPicker(key, items) {
   const w = WORKOUTS[key];
   if (!w) return null;
   const list = items || w.items;
-  // LINE quickReply 上限 13 顆：保留 4 顆給「新增動作/換一組/換部位/取消」，其餘給動作
-  const actionBtns = list.slice(0, 13 - 4).map((it) => ({
+  // LINE quickReply 上限 13 顆：保留 5 顆給「新增動作/換一組/收操/換部位/取消」，其餘給動作
+  const actionBtns = list.slice(0, 13 - 5).map((it) => ({
     type: 'action',
     action: { type: 'message', label: it.name, text: `記:${key}:${it.name}` },
   }));
@@ -248,6 +281,7 @@ function buildLiftPicker(key, items) {
       ...actionBtns,
       { type: 'action', action: { type: 'message', label: '➕ 新增動作', text: `新增動作:${key}` } },
       { type: 'action', action: { type: 'message', label: '🎲 換一組', text: `課表:${key}` } },
+      { type: 'action', action: { type: 'message', label: '🧘 收操', text: `課表:${STRETCH_KEY}` } },
       { type: 'action', action: { type: 'message', label: '🔄 換部位', text: '今日課表' } },
       CANCEL_ITEM,
     ],
@@ -406,8 +440,97 @@ const reminderQuickReply = {
   ],
 };
 
+// 設定資料完成後的「專屬計畫」卡：profile 是使用者填的，plan 來自 nutrition.computePlan
+function buildPlanFlex(profile, plan) {
+  const bfLine = profile.bodyfat != null && profile.bodyfat > 0 ? `${profile.bodyfat}%` : '未填';
+  return {
+    type: 'flex',
+    altText: '你的專屬計畫',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          { type: 'text', text: '🎯 你的專屬計畫', weight: 'bold', size: 'lg', color: '#FFFFFF' },
+          { type: 'text', text: `目標：${profile.goal}　·　活動量：${profile.activity}`, size: 'xs', color: '#FFFFFFCC', wrap: true },
+        ],
+        backgroundColor: '#1F7A5A',
+        paddingAll: '16px',
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: '16px',
+        contents: [
+          row('每日建議熱量', `${fmt(plan.calTarget)} 大卡`, true),
+          row('蛋白質建議', `${fmt(plan.protein)} g`),
+          { type: 'separator', margin: 'md' },
+          row('基礎代謝(BMR)', `${fmt(plan.bmr)} 大卡`),
+          row('每日總消耗(TDEE)', `${fmt(plan.tdee)} 大卡`),
+          { type: 'separator', margin: 'md' },
+          row('身高／體重', `${fmt(profile.height)} cm／${fmt(profile.weight, 1)} kg`),
+          row('體脂', bfLine),
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '已套用到「總覽」與「今日課表」。想改再打「設定資料」。',
+            size: 'xxs',
+            color: '#8C8C8C',
+            wrap: true,
+          },
+        ],
+        paddingAll: '12px',
+      },
+    },
+  };
+}
+
+// 設定資料問卷用的快捷鈕（送出的字就是答案，故意不含符號，才不會被當成指令）
+const sexQuickReply = {
+  items: [
+    { type: 'action', action: { type: 'message', label: '男', text: '男' } },
+    { type: 'action', action: { type: 'message', label: '女', text: '女' } },
+    CANCEL_ITEM,
+  ],
+};
+const bodyfatQuickReply = {
+  items: [
+    { type: 'action', action: { type: 'message', label: '沒量過，跳過', text: '跳過' } },
+    CANCEL_ITEM,
+  ],
+};
+const activityQuickReply = {
+  items: [
+    { type: 'action', action: { type: 'message', label: '久坐(幾乎不動)', text: '久坐' } },
+    { type: 'action', action: { type: 'message', label: '輕度(週1-3)', text: '輕度' } },
+    { type: 'action', action: { type: 'message', label: '中度(週3-5)', text: '中度' } },
+    { type: 'action', action: { type: 'message', label: '高度(週6-7)', text: '高度' } },
+    CANCEL_ITEM,
+  ],
+};
+const goalQuickReply = {
+  items: [
+    { type: 'action', action: { type: 'message', label: '增肌', text: '增肌' } },
+    { type: 'action', action: { type: 'message', label: '減脂', text: '減脂' } },
+    { type: 'action', action: { type: 'message', label: '維持', text: '維持' } },
+    CANCEL_ITEM,
+  ],
+};
+
 module.exports = {
   buildOverviewFlex,
+  buildPlanFlex,
+  sexQuickReply,
+  bodyfatQuickReply,
+  activityQuickReply,
+  goalQuickReply,
   buildSpendingFlex,
   buildWorkoutFlex,
   buildLiftPicker,

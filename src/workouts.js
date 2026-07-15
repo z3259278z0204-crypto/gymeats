@@ -74,6 +74,53 @@ const WORKOUTS = {
 // 選單顯示順序
 const WORKOUT_KEYS = ['胸', '背', '肩膀', '腿'];
 
+// 每個肌群前 N 個動作視為「複合大動作」（主課），其餘為孤立動作。
+const COMPOUND_COUNT = 3;
+// 回傳某肌群的複合動作名稱集合（用來判斷組數次數要用哪一套）
+function compoundNames(key) {
+  const w = WORKOUTS[key];
+  return new Set(w ? w.items.slice(0, COMPOUND_COUNT).map((it) => it.name) : []);
+}
+
+// 各肌群的熱身（動態伸展＋輕重量暖身組），課表最上面自動帶入
+const WARMUPS = {
+  胸: ['肩繞環 前後各 15 下', '伏地挺身（慢） 10 下', '空槓／輕重量臥推 15 下'],
+  背: ['貓牛式 10 下', '彈力帶下拉 15 下', '輕重量划船 15 下'],
+  肩膀: ['肩繞環 前後各 15 下', '彈力帶肩外旋 15 下', '輕重量側平舉 15 下'],
+  腿: ['髖繞環 每邊 10 下', '徒手深蹲 15 下', '空槓深蹲 10 下'],
+};
+function warmupFor(key) {
+  return WARMUPS[key] || ['原地慢跑 2 分鐘', '目標肌群動態伸展 10 下', '主課輕重量暖身組 15 下'];
+}
+
+// 依目標決定組×次、休息、有氧建議
+const GOAL_SCHEME = {
+  增肌: {
+    compound: '4×6-10',
+    iso: '3×10-15',
+    rest: '複合休 90-120 秒／孤立 60 秒',
+    cardio: '有氧少量：每週 1-2 次、15-20 分',
+  },
+  減脂: {
+    compound: '3×10-12',
+    iso: '3×12-15',
+    rest: '休息短：45-60 秒、節奏快',
+    cardio: '有氧多些：每週 3 次、20-30 分',
+  },
+  維持: {
+    compound: '3×8-10',
+    iso: '3×10-12',
+    rest: '休息 60-90 秒',
+    cardio: '有氧：每週 2 次、15-20 分',
+  },
+};
+// 某目標下，複合/孤立動作的組×次字串；goal 為空回 null（沿用動作預設）
+function schemeFor(goal, isCompound) {
+  const s = GOAL_SCHEME[goal];
+  if (!s) return null;
+  return isCompound ? s.compound : s.iso;
+}
+
 // Fisher-Yates 洗牌（不改原陣列）
 function shuffle(arr) {
   const a = arr.slice();
@@ -120,4 +167,14 @@ function pickStretch() {
   return STRETCHES.filter((s) => chosen.has(s));
 }
 
-module.exports = { WORKOUTS, WORKOUT_KEYS, pickWorkout, STRETCHES, pickStretch };
+module.exports = {
+  WORKOUTS,
+  WORKOUT_KEYS,
+  pickWorkout,
+  STRETCHES,
+  pickStretch,
+  compoundNames,
+  warmupFor,
+  schemeFor,
+  GOAL_SCHEME,
+};
