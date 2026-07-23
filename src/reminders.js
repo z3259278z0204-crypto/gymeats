@@ -20,7 +20,7 @@ function reminderText(label) {
 function startReminderScheduler(client) {
   let lastTick = ''; // 記住上次處理到哪一分鐘，避免同一分鐘重複發
 
-  const check = () => {
+  const check = async () => {
     const now = new Date();
     const tick = `${now.toDateString()} ${now.getHours()}:${now.getMinutes()}`;
     if (tick === lastTick) return; // 這一分鐘已處理過
@@ -28,7 +28,7 @@ function startReminderScheduler(client) {
 
     let due;
     try {
-      due = getDueReminders(now.getHours(), now.getMinutes());
+      due = await getDueReminders(now.getHours(), now.getMinutes());
     } catch (e) {
       console.error('提醒查詢出錯：', e && e.message ? e.message : e);
       return;

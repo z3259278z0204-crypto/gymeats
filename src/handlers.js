@@ -188,10 +188,10 @@ function text(t, quickReply) {
 
 // 組某肌群的今日課表卡：隨機抽 5-6 個內建動作 ＋ 這位使用者的自訂動作
 // 回傳可直接回覆的 Flex 卡（含下方動作按鈕）；找不到肌群回 null
-function buildTodayWorkout(lineUid, userId, key, goal) {
+async function buildTodayWorkout(lineUid, userId, key, goal) {
   const items = pickWorkout(key);
   if (!items) return null;
-  const customs = getCustomExercises(userId, key).map((name) => ({ name, sr: '自訂' }));
+  const customs = (await getCustomExercises(userId, key)).map((name) => ({ name, sr: '自訂' }));
   const all = [...items, ...customs];
   pendingWorkout.set(lineUid, all); // 記住這組，續記時按鈕一致
   const card = buildWorkoutFlex(key, all, { goal });
@@ -235,7 +235,7 @@ function startProfile(lineUid) {
 }
 
 // 處理問卷的一步。回傳要回覆的訊息陣列（答對就前進、答錯就重問）
-function handleProfileStep(lineUid, userId, content) {
+async function handleProfileStep(lineUid, userId, content) {
   const state = pendingProfile.get(lineUid);
   const { data } = state;
 
@@ -308,7 +308,7 @@ function handleProfileStep(lineUid, userId, content) {
       data.goal = content;
       pendingProfile.delete(lineUid);
       const plan = computePlan(data);
-      saveProfile(userId, { ...data, ...plan });
+      await saveProfile(userId, { ...data, ...plan });
       return [text('搞定！這是幫你算好的專屬計畫 👇'), buildPlanFlex(data, plan)];
     }
     default:
@@ -430,14 +430,14 @@ function waterGoalFor(summary) {
 async function handleEvent(event) {
   // 加入好友／解除封鎖：送兩則歡迎（歡迎＋問設定資料，接著說明）
   if (event.type === 'follow') {
-    getOrCreateUser(event.source.userId); // 先建帳號
+    await getOrCreateUser(event.source.userId); // 先建帳號
     return [text(WELCOME_1), text(WELCOME_2, welcomeQuickReply)];
   }
 
   // 只處理文字訊息；其他型別（貼圖、圖片等）先給簡單引導
   if (event.type !== 'message') return null;
   const lineUid = event.source.userId;
-  const user = getOrCreateUser(lineUid);
+  const user = await getOrCreateUser(lineUid);
 
   if (event.message.type !== 'text') {
     return [text('目前先支援文字記錄喔～試試打「午餐 雞胸便當 120」')];
@@ -483,7 +483,7 @@ async function handleEvent(event) {
     if (isCommandLike(content)) {
       pendingProfile.delete(lineUid);
     } else {
-      return handleProfileStep(lineUid, user.id, content);
+      return await handleProfileStep(lineUid, user.id, content);
     }
   }
 
@@ -507,8 +507,8 @@ async function handleEvent(event) {
     if (ml > 5000) {
       return [text('這個數字有點大耶😅\n一次大概 200～1000 ml，再試一次', waterPickerQuickReply)];
     }
-    insertWater({ userId: user.id, ml });
-    const sum = getTodaySummary(user.id);
+    await insertWater({ userId: user.id, ml });
+    const sum = await getTodaySummary(user.id);
     const goal = waterGoalFor(sum);
     const total = sum.water.ml;
     const goalPart = goal ? `/${fmt(goal)}` : '';
@@ -519,7 +519,7 @@ async function handleEvent(event) {
   // ---- 定時提醒：設定/查看/關閉每天固定時間提醒記帳 ----
   if (content === '提醒' || content === '提醒設定' || content === '記帳提醒' || content === '定時提醒') {
     clearPending(lineUid);
-    const list = getReminders(user.id);
+    const list = await getReminders(user.id);
     const cur = list.length
       ? '目前提醒：\n' + list.map((r) => `・${pad2(r.hour)}:${pad2(r.minute)}`).join('\n') + '\n\n'
       : '目前還沒設提醒。\n\n';
@@ -531,7 +531,7 @@ async function handleEvent(event) {
     ];
   }
   if (content === '我的提醒' || content === '查看提醒') {
-    const list = getReminders(user.id);
+    const list = await getReminders(user.id);
     if (!list.length) return [text('目前沒有任何提醒。打「提醒」可設定 ⏰', reminderQuickReply)];
     return [
       text(
@@ -546,7 +546,7 @@ async function handleEvent(event) {
     content === '關閉提醒' || content === '取消提醒' ||
     content === '關掉提醒' || content === '關閉全部提醒'
   ) {
-    const n = disableAllReminders(user.id);
+    const n = await disableAllReminders(user.id);
     return [text(n > 0 ? `🔕 已關閉全部提醒（${n} 個時段）` : '目前沒有開啟中的提醒')];
   }
   {
@@ -556,7 +556,7 @@ async function handleEvent(event) {
       const h = Number(rm[1]);
       const mi = Number(rm[2]);
       if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) {
-        setReminder({ userId: user.id, hour: h, minute: mi, label: null });
+        await setReminder({ userId: user.id, hour: h, minute: mi, label: null });
         return [
           text(
             `✅ 已設定每天 ${pad2(h)}:${pad2(mi)} 提醒你記帳 ⏰\n可再設其他時段，或打「我的提醒」查看、「關閉提醒」取消`,
@@ -605,7 +605,7 @@ async function handleEvent(event) {
   if (pendingDelete.has(lineUid)) {
     if (content === '確定刪除') {
       pendingDelete.delete(lineUid);
-      const n = deleteAllUserData(user.id);
+      const n = await deleteAllUserData(user.id);
       return [text(`🗑️ 已刪除你的全部記錄（共 ${n} 筆），資料已清空。\n感謝試用 🙏`)];
     }
     pendingDelete.delete(lineUid); // 沒回「確定刪除」→ 當作放棄，往下照常處理
@@ -631,8 +631,8 @@ async function handleEvent(event) {
       pendingLift.delete(lineUid);
       const weight = Number(m[1]);
       const reps = Number(m[2]);
-      const prevMax = getLiftMax(user.id, name);
-      insertLift({ userId: user.id, name, weight, reps, kcal: LIFT_KCAL_PER_EXERCISE });
+      const prevMax = await getLiftMax(user.id, name);
+      await insertLift({ userId: user.id, name, weight, reps, kcal: LIFT_KCAL_PER_EXERCISE });
       const pr = prevMax === null || weight > prevMax;
       const prLine = pr ? '　🎉 新高！' : `（最佳 ${fmt(prevMax, 1)}kg）`;
       const msg = text(
@@ -657,7 +657,7 @@ async function handleEvent(event) {
       stretchCard.quickReply = stretchQuickReply;
       return [stretchCard];
     }
-    const card = buildTodayWorkout(lineUid, user.id, key, userGoal(user)); // 內建隨機 5-6 個 ＋ 自訂動作
+    const card = await buildTodayWorkout(lineUid, user.id, key, userGoal(user)); // 內建隨機 5-6 個 ＋ 自訂動作
     if (card) return [card];
     return [text('找不到這個部位，點「今日課表」重新選 💪')];
   }
@@ -680,11 +680,11 @@ async function handleEvent(event) {
     // 改點別的功能指令 → 放棄新增；名稱過長、或純數字（沒意義）也不收
     if (!isCommandLike(content) && content.length <= 20 && !/^\d+(\.\d+)?$/.test(content)) {
       pendingCustom.delete(lineUid);
-      const added = addCustomExercise({ userId: user.id, group, name: content });
+      const added = await addCustomExercise({ userId: user.id, group, name: content });
       const msg = added
         ? `✅ 已把「${content}」加進「${group}」清單，之後點課表就看得到`
         : `「${content}」已經在「${group}」清單裡囉`;
-      const card = buildTodayWorkout(lineUid, user.id, group, userGoal(user));
+      const card = await buildTodayWorkout(lineUid, user.id, group, userGoal(user));
       return card ? [text(msg), card] : [text(msg)];
     }
     pendingCustom.delete(lineUid); // 放棄新增，往下照常處理
@@ -755,7 +755,7 @@ async function handleEvent(event) {
       pendingExpense.delete(lineUid);
       const name = (m[1] || '').trim() || cat;
       const amount = Number(m[2]);
-      insertExpense({ userId: user.id, category: cat, name, amount });
+      await insertExpense({ userId: user.id, category: cat, name, amount });
       const nameLine = name !== cat ? `・${name}` : '';
       return [text(`✅ 已記帳：${cat}${nameLine}　$${fmt(amount)}`, spendingQuickReply)];
     }
@@ -775,7 +775,7 @@ async function handleEvent(event) {
     if (!d) {
       return [text('看不懂是哪一天 🤔\n試試「總覽」「昨天總覽」或「總覽 7/13」')];
     }
-    const summary = getSummary(user.id, d.start, d.end);
+    const summary = await getSummary(user.id, d.start, d.end);
     const calTarget = user.cal_target ?? config.calTargetDefault;
     const waterGoal = waterGoalFor(summary);
     const card = buildOverviewFlex(summary, {
@@ -791,13 +791,13 @@ async function handleEvent(event) {
 
   // ---- 設定每日目標 ----
   if (intent.type === 'setTarget') {
-    setUserTarget(user.id, intent.target);
+    await setUserTarget(user.id, intent.target);
     return [text(`✅ 已把每日熱量目標設為 ${fmt(intent.target)} 大卡\n打「總覽」就會看到淨熱量對目標`)];
   }
 
   // ---- 通用記帳：記一筆支出 ----
   if (intent.type === 'expense') {
-    insertExpense({
+    await insertExpense({
       userId: user.id,
       category: intent.category,
       name: intent.name,
@@ -819,7 +819,7 @@ async function handleEvent(event) {
       month: [monthStartMs, '本月花費'],
     };
     const [startFn, title] = startMap[intent.period] || startMap.month;
-    const report = getSpending(user.id, startFn());
+    const report = await getSpending(user.id, startFn());
     const card = buildSpendingFlex(title, report);
     card.quickReply = spendingQuickReply; // 卡片下面附今日/本週/本月快捷鈕
     return [card];
@@ -827,8 +827,8 @@ async function handleEvent(event) {
 
   // ---- 重訓記錄（動作＋重量＋次數），並判斷是否破紀錄 ----
   if (intent.type === 'lift') {
-    const prevMax = getLiftMax(user.id, intent.name);
-    insertLift({
+    const prevMax = await getLiftMax(user.id, intent.name);
+    await insertLift({
       userId: user.id,
       name: intent.name,
       weight: intent.weight,
@@ -848,7 +848,7 @@ async function handleEvent(event) {
 
   // ---- 查某動作進步趨勢 ----
   if (intent.type === 'liftHistory') {
-    const rows = getLiftProgress(user.id, intent.name);
+    const rows = await getLiftProgress(user.id, intent.name);
     if (!rows.length) {
       return [
         text(`還沒有「${intent.name}」的紀錄 🤔\n練完打「${intent.name} 60 8」記一下（動作 重量 次數）`),
@@ -869,7 +869,7 @@ async function handleEvent(event) {
 
   // ---- 記訓練（含消耗熱量）----
   if (intent.type === 'workout') {
-    insertWorkout({
+    await insertWorkout({
       userId: user.id,
       name: intent.activity,
       duration: intent.minutes,
@@ -885,7 +885,7 @@ async function handleEvent(event) {
 
   // ---- 體重 ----
   if (intent.type === 'weight') {
-    insertBody({ userId: user.id, weight: intent.weight, bodyfat: intent.bodyfat });
+    await insertBody({ userId: user.id, weight: intent.weight, bodyfat: intent.bodyfat });
     const bf = intent.bodyfat ? `，體脂 ${intent.bodyfat}%` : '';
     return [text(`已記錄體重 ${intent.weight} kg${bf}`)];
   }
@@ -914,7 +914,7 @@ async function handleEvent(event) {
 // 記一餐：問 Claude 估熱量、寫入 food_logs、組回覆。meal 可為 null，price 可為 null。
 async function recordMeal(userId, meal, name, price) {
   // 每日上限保護：超過就不呼叫 AI（不花錢），回中性提示
-  const todayMeals = getTodaySummary(userId).food.meals;
+  const todayMeals = (await getTodaySummary(userId)).food.meals;
   if (todayMeals >= DAILY_MEAL_LIMIT) {
     return text(
       `今天的記餐額度用完囉（每日上限 ${DAILY_MEAL_LIMIT} 餐）🙌\n` +
@@ -922,7 +922,7 @@ async function recordMeal(userId, meal, name, price) {
     );
   }
   const nutrition = await estimateNutrition(meal ? `${meal} ${name}` : name);
-  insertFood({ userId, name, ...nutrition, price });
+  await insertFood({ userId, name, ...nutrition, price });
 
   const mealLabel = meal ? `${meal}・` : '';
   const priceLine = price !== null && price !== undefined ? `　花費 $${fmt(price)}` : '';

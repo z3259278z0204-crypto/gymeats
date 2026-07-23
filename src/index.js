@@ -7,7 +7,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const { config, assertConfig } = require('./config');
 const { handleEvent } = require('./handlers');
-const { getOrCreateUser, upsertAppleEnergy } = require('./db');
+const { getOrCreateUser, upsertAppleEnergy, initDb } = require('./db');
 const { startReminderScheduler } = require('./reminders');
 
 assertConfig(); // 啟動時提醒金鑰有沒有漏填
@@ -48,7 +48,7 @@ app.post('/webhook', line.middleware(lineConfig), (req, res) => {
 
 // Apple 捷徑連動：iPhone 捷徑讀「今日活動能量」後 POST 到這裡，記進今天的運動消耗。
 // 只在這條路由用 express.json()（不能放在 /webhook 前面，LINE 簽章需要原始 body）。
-app.post('/apple', express.json(), (req, res) => {
+app.post('/apple', express.json(), async (req, res) => {
   const { token, uid, kcal } = req.body || {};
   // 通行證檢查：沒設 APPLE_TOKEN 或對不上就擋掉
   if (!config.apple.token || token !== config.apple.token) {
@@ -58,14 +58,27 @@ app.post('/apple', express.json(), (req, res) => {
   if (!uid || !Number.isFinite(energy) || energy < 0) {
     return res.status(400).json({ ok: false, error: '資料格式錯誤（需要 uid 與 kcal）' });
   }
-  const user = getOrCreateUser(uid);
-  const rounded = Math.round(energy);
-  upsertAppleEnergy({ userId: user.id, kcal: rounded });
-  res.json({ ok: true, kcal: rounded });
+  try {
+    const user = await getOrCreateUser(uid);
+    const rounded = Math.round(energy);
+    await upsertAppleEnergy({ userId: user.id, kcal: rounded });
+    res.json({ ok: true, kcal: rounded });
+  } catch (err) {
+    console.error('/apple 出錯：', err);
+    res.status(500).json({ ok: false, error: '伺服器忙線，請稍後再試' });
+  }
 });
 
-app.listen(config.port, () => {
-  console.log(`🚀 GymEats 已啟動，正在監聽 http://localhost:${config.port}`);
-  console.log('   下一步：用 ngrok 對外，並把網址填到 LINE 後台的 Webhook URL');
-  startReminderScheduler(client); // 開始跑定時提醒
-});
+// 先把雲端資料庫的資料表建好，再開始服務（避免第一則訊息就查到空表）
+initDb()
+  .then(() => {
+    app.listen(config.port, () => {
+      console.log(`🚀 GymEats 已啟動，正在監聽 http://localhost:${config.port}`);
+      console.log('   下一步：用 ngrok 對外，並把網址填到 LINE 後台的 Webhook URL');
+      startReminderScheduler(client); // 開始跑定時提醒
+    });
+  })
+  .catch((err) => {
+    console.error('❌ 資料庫初始化失敗，程式無法啟動：', err);
+    process.exit(1);
+  });
