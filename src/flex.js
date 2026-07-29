@@ -39,6 +39,30 @@ function row(label, value, highlight = false) {
   };
 }
 
+// 進度條：LINE Flex 沒有原生進度條，用「灰底盒 + 依百分比寬度的彩色內盒」疊出來
+// pct 會夾在 0–100；color 為填滿顏色
+function progressBar(pct, color = '#1F7A5A') {
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  return {
+    type: 'box',
+    layout: 'vertical',
+    height: '10px',
+    backgroundColor: '#ECECEC',
+    cornerRadius: '5px',
+    margin: 'sm',
+    contents: [
+      {
+        type: 'box',
+        layout: 'vertical',
+        contents: [{ type: 'filler' }],
+        width: `${p}%`,
+        backgroundColor: color,
+        cornerRadius: '5px',
+      },
+    ],
+  };
+}
+
 // 總覽卡片。summary 來自 db.getSummary()。
 // opts：{ calTarget, waterGoal, title, dateLabel } — 標題與日期讓「查別天」也能共用這張卡。
 function buildOverviewFlex(summary, opts = {}) {
@@ -90,6 +114,10 @@ function buildOverviewFlex(summary, opts = {}) {
           row('攝取', `${fmt(food.kcal)} 大卡`),
           row('運動消耗', burn > 0 ? `-${fmt(burn)} 大卡` : '—'),
           row('淨熱量', netText, netOver),
+          // 有設熱量目標就畫一條進度條：未超標綠色、超標橘色
+          ...(calTarget
+            ? [progressBar((net / calTarget) * 100, netOver ? '#E67E22' : '#1F7A5A')]
+            : []),
           { type: 'separator', margin: 'md' },
           row('蛋白質', proteinTarget ? `${fmt(food.protein)}/${fmt(proteinTarget)} g` : `${fmt(food.protein)} g`),
           row('碳水', `${fmt(food.carb)} g`),
@@ -171,12 +199,31 @@ function buildSpendingFlex(title, report, workNet = null) {
     ],
   };
 
-  // ── 收支兩行（只有接到工作淨薪才顯示）──
+  // ── 收支兩行 ＋ 儲蓄率（只有接到工作淨薪才顯示）──
+  // 儲蓄率＝結餘 ÷ 工作淨薪，看這個月存下幾成；淨薪 ≤0 就不算
+  const savingRate =
+    hasWork && workNet.net > 0 ? Math.round((balance / workNet.net) * 100) : null;
   const flowRows = hasWork
     ? [
         { type: 'separator', margin: 'lg' },
         spendRow('💰', '工作淨薪', `+$${fmt(workNet.net)}`, '#1F7A5A'),
-        spendRow('🍱', '日常支出', `−$${fmt(total)}`, '#C0392B'),
+        spendRow(
+          '🍱',
+          '日常支出',
+          total > 0 ? `−$${fmt(total)}` : '$0',
+          total > 0 ? '#C0392B' : '#8C8C8C'
+        ),
+        ...(savingRate !== null
+          ? [
+              spendRow(
+                '🏦',
+                '儲蓄率',
+                `${savingRate}%`,
+                savingRate >= 0 ? '#1F7A5A' : '#C0392B'
+              ),
+              progressBar(savingRate, savingRate >= 0 ? '#1F7A5A' : '#C0392B'),
+            ]
+          : []),
       ]
     : [];
 
