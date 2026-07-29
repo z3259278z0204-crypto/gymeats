@@ -104,57 +104,114 @@ function buildOverviewFlex(summary, opts = {}) {
   };
 }
 
+// 各花費分類對應的 icon，讓清單一眼分得出來
+const SPEND_ICONS = {
+  飲食: '🍱',
+  交通: '🚗',
+  居住: '🏠',
+  娛樂: '🎮',
+  購物: '🛒',
+  醫療: '💊',
+  學習: '📚',
+  人情: '🎁',
+  其他: '📦',
+};
+
+// 花費卡的一列：左邊 icon＋分類、右邊金額（金額可帶正負色）
+function spendRow(icon, label, value, valueColor = '#333333') {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      { type: 'text', text: `${icon}  ${label}`, size: 'sm', color: '#555555', flex: 5 },
+      {
+        type: 'text',
+        text: value,
+        size: 'sm',
+        color: valueColor,
+        align: 'end',
+        flex: 4,
+        weight: 'bold',
+      },
+    ],
+  };
+}
+
 // 花費統計卡：title 例「本月花費」，report 來自 db.getSpending()
-// workNet（選填）＝工作 bot 回報的本月淨薪明細，有帶就在卡片底部加「整體結餘」區塊
+// workNet（選填）＝工作 bot 回報的本月淨薪明細，有帶就把「整體結餘」放大當主角
 function buildSpendingFlex(title, report, workNet = null) {
   const { total, cats } = report;
+  const hasWork = workNet && typeof workNet.net === 'number';
 
-  const rows = cats.length
-    ? cats.map((c) => row(c.category, `$${fmt(c.amount)}`))
+  // ── 主角數字（hero）──
+  // 有工作淨薪：主角＝整體結餘（工作淨薪−日常支出），正綠負紅；沒有：主角＝日常支出總額
+  const balance = hasWork ? workNet.net - total : total;
+  const heroLabel = hasWork ? title.replace('花費', '結餘') : title;
+  const heroColor = hasWork
+    ? balance >= 0
+      ? '#1F7A5A'
+      : '#C0392B'
+    : '#1F1F1F';
+  const heroDot = hasWork ? (balance >= 0 ? '  🟢' : '  🔴') : '';
+
+  const hero = {
+    type: 'box',
+    layout: 'vertical',
+    spacing: 'xs',
+    contents: [
+      { type: 'text', text: heroLabel, size: 'sm', color: '#8C8C8C' },
+      {
+        type: 'text',
+        text: `$${fmt(balance)}${heroDot}`,
+        size: '3xl',
+        weight: 'bold',
+        color: heroColor,
+        wrap: true,
+      },
+    ],
+  };
+
+  // ── 收支兩行（只有接到工作淨薪才顯示）──
+  const flowRows = hasWork
+    ? [
+        { type: 'separator', margin: 'lg' },
+        spendRow('💰', '工作淨薪', `+$${fmt(workNet.net)}`, '#1F7A5A'),
+        spendRow('🍱', '日常支出', `−$${fmt(total)}`, '#C0392B'),
+      ]
+    : [];
+
+  // ── 分類明細 ──
+  const catBlock = cats.length
+    ? [
+        { type: 'separator', margin: 'lg' },
+        {
+          type: 'text',
+          text: hasWork ? '日常花費明細' : '花費明細',
+          size: 'xs',
+          color: '#AAAAAA',
+          margin: 'md',
+        },
+        ...cats.map((c) =>
+          spendRow(SPEND_ICONS[c.category] || '•', c.category, `$${fmt(c.amount)}`)
+        ),
+        { type: 'separator', margin: 'md' },
+        spendRow('🧾', '合計', `$${fmt(total)}`, '#1F1F1F'),
+      ]
     : [
+        { type: 'separator', margin: 'lg' },
         {
           type: 'text',
           text: '這段期間還沒有任何花費紀錄',
           size: 'sm',
           color: '#8C8C8C',
           wrap: true,
+          margin: 'md',
         },
       ];
 
-  const bodyContents = [
-    ...rows,
-    { type: 'separator', margin: 'md' },
-    row('日常支出', `$${fmt(total)}`, true),
-  ];
-
-  // 有接到工作 bot 的淨薪，就加一段「工作淨薪 − 日常支出 ＝ 整體結餘」
-  if (workNet && typeof workNet.net === 'number') {
-    const balance = workNet.net - total;
-    bodyContents.push(
-      { type: 'separator', margin: 'md' },
-      row('工作淨薪', `$${fmt(workNet.net)}`),
-      {
-        type: 'box',
-        layout: 'horizontal',
-        margin: 'md',
-        contents: [
-          { type: 'text', text: '整體結餘', weight: 'bold', size: 'md', color: '#1F1F1F' },
-          {
-            type: 'text',
-            text: `$${fmt(balance)}`,
-            weight: 'bold',
-            size: 'md',
-            align: 'end',
-            color: balance >= 0 ? '#1F7A5A' : '#C0392B',
-          },
-        ],
-      }
-    );
-  }
-
   return {
     type: 'flex',
-    altText: title,
+    altText: `${heroLabel} $${fmt(balance)}`,
     contents: {
       type: 'bubble',
       header: {
@@ -162,7 +219,12 @@ function buildSpendingFlex(title, report, workNet = null) {
         layout: 'vertical',
         contents: [
           { type: 'text', text: title, weight: 'bold', size: 'lg', color: '#FFFFFF' },
-          { type: 'text', text: `共 ${cats.length} 類`, size: 'xs', color: '#FFFFFFCC' },
+          {
+            type: 'text',
+            text: hasWork ? '工作 × 生活 收支合看' : `共 ${cats.length} 類`,
+            size: 'xs',
+            color: '#FFFFFFCC',
+          },
         ],
         backgroundColor: '#1F7A5A',
         paddingAll: '16px',
@@ -170,9 +232,9 @@ function buildSpendingFlex(title, report, workNet = null) {
       body: {
         type: 'box',
         layout: 'vertical',
-        spacing: 'md',
+        spacing: 'sm',
         paddingAll: '16px',
-        contents: bodyContents,
+        contents: [hero, ...flowRows, ...catBlock],
       },
     },
   };
