@@ -19,6 +19,11 @@ const config = {
   calTargetDefault: Number(process.env.CAL_TARGET) || null,
   // 每日喝水目標（環境變數 WATER_TARGET，毫升）。沒設就依最新體重×30ml 自動算，再沒有就 2000
   waterTargetDefault: Number(process.env.WATER_TARGET) || null,
+  // 跨 bot 接工作 bot（line-teaching-bot）的本月淨薪。查「本月花費」時合看整體結餘用
+  workLink: {
+    url: process.env.WORK_REPORT_URL || 'https://line-teaching-bot.fly.dev/report/salary',
+    token: process.env.REPORT_TOKEN || '',
+  },
 };
 
 // 啟動時檢查必填金鑰有沒有漏，漏了就提前提醒，不要跑到一半才壞

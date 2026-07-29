@@ -105,7 +105,8 @@ function buildOverviewFlex(summary, opts = {}) {
 }
 
 // 花費統計卡：title 例「本月花費」，report 來自 db.getSpending()
-function buildSpendingFlex(title, report) {
+// workNet（選填）＝工作 bot 回報的本月淨薪明細，有帶就在卡片底部加「整體結餘」區塊
+function buildSpendingFlex(title, report, workNet = null) {
   const { total, cats } = report;
 
   const rows = cats.length
@@ -119,6 +120,37 @@ function buildSpendingFlex(title, report) {
           wrap: true,
         },
       ];
+
+  const bodyContents = [
+    ...rows,
+    { type: 'separator', margin: 'md' },
+    row('日常支出', `$${fmt(total)}`, true),
+  ];
+
+  // 有接到工作 bot 的淨薪，就加一段「工作淨薪 − 日常支出 ＝ 整體結餘」
+  if (workNet && typeof workNet.net === 'number') {
+    const balance = workNet.net - total;
+    bodyContents.push(
+      { type: 'separator', margin: 'md' },
+      row('工作淨薪', `$${fmt(workNet.net)}`),
+      {
+        type: 'box',
+        layout: 'horizontal',
+        margin: 'md',
+        contents: [
+          { type: 'text', text: '整體結餘', weight: 'bold', size: 'md', color: '#1F1F1F' },
+          {
+            type: 'text',
+            text: `$${fmt(balance)}`,
+            weight: 'bold',
+            size: 'md',
+            align: 'end',
+            color: balance >= 0 ? '#1F7A5A' : '#C0392B',
+          },
+        ],
+      }
+    );
+  }
 
   return {
     type: 'flex',
@@ -140,11 +172,7 @@ function buildSpendingFlex(title, report) {
         layout: 'vertical',
         spacing: 'md',
         paddingAll: '16px',
-        contents: [
-          ...rows,
-          { type: 'separator', margin: 'md' },
-          row('合計', `$${fmt(total)}`, true),
-        ],
+        contents: bodyContents,
       },
     },
   };

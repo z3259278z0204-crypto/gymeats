@@ -49,6 +49,7 @@ const {
   goalQuickReply,
 } = require('./flex');
 const { pickWorkout, pickStretch, WORKOUT_KEYS } = require('./workouts');
+const { fetchWorkNet } = require('./worklink');
 const { computePlan } = require('./nutrition');
 const { config } = require('./config');
 
@@ -820,7 +821,9 @@ async function handleEvent(event) {
     };
     const [startFn, title] = startMap[intent.period] || startMap.month;
     const report = await getSpending(user.id, startFn());
-    const card = buildSpendingFlex(title, report);
+    // 只有「本月花費」才去接工作 bot 的本月淨薪，合看整體結餘（薪資是按月算）
+    const workNet = intent.period === 'month' ? await fetchWorkNet() : null;
+    const card = buildSpendingFlex(title, report, workNet);
     card.quickReply = spendingQuickReply; // 卡片下面附今日/本週/本月快捷鈕
     return [card];
   }
